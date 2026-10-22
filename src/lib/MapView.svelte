@@ -180,8 +180,10 @@
           <div class="legend-row">
             <span
               class="swatch"
-              style:background={CATEGORIES[cat].dashed ? 'none' : CATEGORIES[cat].color}
-              style:border-top={CATEGORIES[cat].dashed ? `3px dashed ${CATEGORIES[cat].color}` : 'none'}
+              style:background={CATEGORIES[cat].dashed
+                ? // Three equal 5px dashes with two 3.5px gaps (fills the 22px swatch); border-radius rounds the outer ends.
+                  `linear-gradient(to right, ${CATEGORIES[cat].color} 0 5px, transparent 5px 8.5px, ${CATEGORIES[cat].color} 8.5px 13.5px, transparent 13.5px 17px, ${CATEGORIES[cat].color} 17px)`
+                : CATEGORIES[cat].color}
             ></span>
             {CATEGORIES[cat].label}
           </div>
