@@ -1,9 +1,55 @@
+/* Light unless the planner's dark-mode toggle sets data-theme="dark" on <html> (see theme.svelte.ts). */
+:root {
+  color-scheme: light;
+  --fg: #222;
+  --bg: #fff;
+  --muted: #777;
+  --heading: #555;
+  --icon: #888;
+  --fold-fg: #666;
+  --border: #bbb;
+  --divider: #e5e5e5;
+  --button-bg: #f7f7f7;
+  --button-hover: #eee;
+  --overlay-bg: rgba(255, 255, 255, 0.92);
+  --shadow: rgba(0, 0, 0, 0.12);
+  --waypoint: #2c3e50;
+  --danger: #c0392b;
+  --danger-text: #c0392b;
+  --success-text: #27ae60;
+  --map-bg: #ddd;
+  /* Applied to the OpenStreetMap tiles, which only come in light. */
+  --tile-filter: none;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --fg: #e6e6e6;
+  --bg: #1c1d1f;
+  --muted: #9a9a9a;
+  --heading: #aaa;
+  --icon: #999;
+  --fold-fg: #aaa;
+  --border: #4a4c50;
+  --divider: #333539;
+  --button-bg: #2a2c2f;
+  --button-hover: #35373b;
+  --overlay-bg: rgba(28, 29, 31, 0.92);
+  --shadow: rgba(0, 0, 0, 0.45);
+  --waypoint: #4a6582;
+  --danger: #c0392b;
+  --danger-text: #ff7b6b;
+  --success-text: #4cd286;
+  --map-bg: #222;
+  --tile-filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.85);
+}
+
 html,
 body {
   margin: 0;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  color: #222;
-  background: #fff;
+  color: var(--fg);
+  background: var(--bg);
 }
 
 button,
@@ -14,22 +60,25 @@ input {
 
 button {
   padding: 4px 10px;
-  border: 1px solid #bbb;
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background: #f7f7f7;
+  background: var(--button-bg);
+  color: inherit;
   cursor: pointer;
 }
 
 button:hover {
-  background: #eee;
+  background: var(--button-hover);
 }
 
 input {
   padding: 4px 8px;
-  border: 1px solid #bbb;
+  border: 1px solid var(--border);
   border-radius: 4px;
+  background: var(--bg);
+  color: inherit;
 }
 
 .muted {
-  color: #777;
+  color: var(--muted);
 }

@@ -64,7 +64,7 @@
   }
   .results li {
     padding: 6px 0;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--divider);
     font-size: 13px;
   }
   .label {

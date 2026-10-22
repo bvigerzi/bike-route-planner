@@ -5,6 +5,7 @@
   import { CATEGORIES, CATEGORY_ORDER } from './categories';
   import { DEFAULT_CENTER, DEFAULT_ZOOM, MOBILE_QUERY } from './config';
   import { planner } from './state.svelte';
+  import { theme, toggleDark } from './theme.svelte';
 
   // All Leaflet usage lives in this component so the map library can be swapped later.
   let container: HTMLDivElement;
@@ -159,6 +160,11 @@
 
 <div class="map-wrap">
   <div class="map" bind:this={container}></div>
+  <button class="theme-toggle" aria-label="Dark mode" aria-pressed={theme.dark} title="Dark mode" onclick={toggleDark}>
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <circle cx="8" cy="8" r="6.5" fill={theme.dark ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.5" />
+    </svg>
+  </button>
   <div class="legend">
     <button class="legend-toggle" aria-expanded={legendOpen} aria-controls="legend-rows" onclick={() => (legendOpen = !legendOpen)}>
       Legend {legendOpen ? '▾' : '▴'}
@@ -192,22 +198,72 @@
   .map {
     height: 100%;
     cursor: crosshair;
+    background: var(--map-bg);
+  }
+  /* Only the base tiles are filtered (darkened in dark mode); routes and markers keep their colours. */
+  .map :global(.leaflet-tile-pane) {
+    filter: var(--tile-filter);
+  }
+  .map :global(.leaflet-bar a),
+  .map :global(.leaflet-popup-content-wrapper),
+  .map :global(.leaflet-popup-tip),
+  .map :global(.leaflet-tooltip) {
+    background: var(--bg);
+    color: var(--fg);
+  }
+  .map :global(.leaflet-bar a:hover) {
+    background: var(--button-hover);
+  }
+  .map :global(.leaflet-bar a),
+  .map :global(.leaflet-tooltip) {
+    border-color: var(--border);
+  }
+  .map :global(.leaflet-control-attribution) {
+    background: var(--overlay-bg);
+    color: var(--fg);
+  }
+  .map :global(.leaflet-control-attribution a) {
+    color: inherit;
   }
   .legend {
     position: absolute;
     right: 10px;
     bottom: 24px;
     z-index: 1000;
-    background: rgba(255, 255, 255, 0.92);
+    background: var(--overlay-bg);
     padding: 6px 10px;
     border-radius: 6px;
     font-size: 12px;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   }
+  .theme-toggle {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: var(--overlay-bg);
+    color: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  }
+  .theme-toggle:hover {
+    background: var(--bg);
+  }
   /* Clear of the planner's tab, which overlaps the bottom of the map on mobile. */
   @media (max-width: 700px) {
     .legend {
       bottom: 36px;
+    }
+    /* Below the attribution, which moves to the top right on mobile. */
+    .theme-toggle {
+      top: 28px;
     }
   }
   .legend-toggle {
@@ -216,6 +272,7 @@
     padding: 0;
     border: none;
     background: none;
+    color: inherit;
     font-size: 12px;
     font-weight: bold;
     text-align: left;
@@ -282,7 +339,7 @@
     width: 26px;
     height: 26px;
     border-radius: 50%;
-    background: #2c3e50;
+    background: var(--waypoint);
     color: #fff;
     border: 2px solid #fff;
     box-sizing: border-box;
@@ -293,7 +350,7 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
   }
   :global(.wp-marker.start) {
-    background: #c0392b;
+    background: var(--danger);
   }
   :global(.wp-marker.loop) {
     font-size: 9px;

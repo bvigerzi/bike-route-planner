@@ -279,7 +279,7 @@
     position: relative;
     z-index: 1001; /* Above Leaflet's panes and controls, so the tab overlaps the map. */
     box-sizing: border-box;
-    background: #fff;
+    background: var(--bg);
   }
   h1 {
     font-size: 18px;
@@ -290,13 +290,13 @@
     position: absolute;
     padding: 0;
     border: none;
-    background: #fff;
-    color: #666;
+    background: var(--bg);
+    color: var(--fold-fg);
     -webkit-tap-highlight-color: transparent;
   }
   .fold:hover {
-    background: #fff;
-    color: #222;
+    background: var(--bg);
+    color: var(--fg);
   }
   /* The chevron is drawn pointing up and turned to point where the planner will go. */
   .fold svg {
@@ -306,7 +306,7 @@
     aside {
       width: 340px;
       height: 100%;
-      box-shadow: 2px 0 6px rgba(0, 0, 0, 0.12);
+      box-shadow: 2px 0 6px var(--shadow);
       transition: width 0.25s ease;
     }
     aside.folded {
@@ -319,7 +319,7 @@
       padding: 28px 2px 28px 0;
       border-radius: 0 12px 12px 0;
       /* Shadow only on the tab's outer sides; its left edge merges into the planner. */
-      box-shadow: 3px 0 5px -1px rgba(0, 0, 0, 0.12);
+      box-shadow: 3px 0 5px -1px var(--shadow);
     }
     .fold svg {
       transform: rotate(-90deg);
@@ -348,7 +348,7 @@
   @media (max-width: 700px) {
     aside {
       padding: 12px 16px;
-      box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.12);
+      box-shadow: 0 -2px 6px var(--shadow);
     }
     .fold {
       bottom: 100%;
@@ -357,7 +357,7 @@
       padding: 2px 28px 0;
       border-radius: 12px 12px 0 0;
       /* Shadow only above and beside the tab; its bottom edge merges into the planner. */
-      box-shadow: 0 -3px 5px -1px rgba(0, 0, 0, 0.12);
+      box-shadow: 0 -3px 5px -1px var(--shadow);
     }
     aside:not(.folded) .fold svg {
       transform: rotate(180deg);
@@ -402,12 +402,12 @@
     font-size: 14px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #555;
+    color: var(--heading);
     margin: 0 0 8px;
   }
   section {
     padding: 12px 0;
-    border-top: 1px solid #e5e5e5;
+    border-top: 1px solid var(--divider);
   }
   section:first-of-type {
     border-top: none;
@@ -447,7 +447,7 @@
     width: 22px;
     height: 22px;
     border-radius: 50%;
-    background: #2c3e50;
+    background: var(--waypoint);
     color: #fff;
     font-size: 11px;
     font-weight: bold;
@@ -456,7 +456,7 @@
     justify-content: center;
   }
   .badge.start {
-    background: #c0392b;
+    background: var(--danger);
   }
   .toggle {
     font-size: 11px;
@@ -472,7 +472,7 @@
     background: none;
     font-size: 16px;
     cursor: pointer;
-    color: #888;
+    color: var(--icon);
     padding: 0 4px;
   }
   .row {
@@ -486,14 +486,14 @@
   a.button {
     font-size: 13px;
     padding: 4px 10px;
-    border: 1px solid #bbb;
+    border: 1px solid var(--border);
     border-radius: 4px;
-    background: #f7f7f7;
+    background: var(--button-bg);
     color: inherit;
     text-decoration: none;
   }
   a.button:hover {
-    background: #eee;
+    background: var(--button-hover);
   }
   .name {
     width: 100%;
@@ -514,7 +514,7 @@
   }
   .stats span {
     font-size: 11px;
-    color: #777;
+    color: var(--muted);
   }
   .breakdown li {
     display: flex;
@@ -530,11 +530,11 @@
     border-radius: 2px;
   }
   .error {
-    color: #c0392b;
+    color: var(--danger-text);
     font-size: 12px;
   }
   .success {
-    color: #27ae60;
+    color: var(--success-text);
     font-size: 12px;
   }
 </style>
