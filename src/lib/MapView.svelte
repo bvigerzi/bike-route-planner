@@ -13,6 +13,8 @@
   const routeLayer = L.layerGroup();
   // Folded by default on mobile, where the open legend covers much of the map.
   let legendOpen = $state(!matchMedia(MOBILE_QUERY).matches);
+  // The rows' natural width; folding animates the legend between it and the toggle's width.
+  let legendRowsWidth = $state(0);
 
   onMount(() => {
     const m = L.map(container).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
@@ -51,7 +53,13 @@
     // Leaflet only tracks window resizes; folding the planner on mobile resizes the map on its own.
     const resize = new ResizeObserver(() => m.invalidateSize());
     resize.observe(container);
+    // On mobile the planner's tab overlaps the bottom of the map, so the attribution moves to the top.
+    const mobile = matchMedia(MOBILE_QUERY);
+    const placeAttribution = () => m.attributionControl.setPosition(mobile.matches ? 'topright' : 'bottomright');
+    placeAttribution();
+    mobile.addEventListener('change', placeAttribution);
     return () => {
+      mobile.removeEventListener('change', placeAttribution);
       resize.disconnect();
       m.remove();
     };
@@ -155,8 +163,12 @@
     <button class="legend-toggle" aria-expanded={legendOpen} aria-controls="legend-rows" onclick={() => (legendOpen = !legendOpen)}>
       Legend {legendOpen ? '▾' : '▴'}
     </button>
-    {#if legendOpen}
-      <div id="legend-rows">
+    <div
+      id="legend-rows"
+      class:folded={!legendOpen}
+      style:width={legendRowsWidth ? `${legendOpen ? legendRowsWidth : 0}px` : undefined}
+    >
+      <div class="legend-inner" bind:offsetWidth={legendRowsWidth}>
         {#each CATEGORY_ORDER as cat}
           <div class="legend-row">
             <span
@@ -168,7 +180,7 @@
           </div>
         {/each}
       </div>
-    {/if}
+    </div>
   </div>
 </div>
 
@@ -192,6 +204,12 @@
     font-size: 12px;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   }
+  /* Clear of the planner's tab, which overlaps the bottom of the map on mobile. */
+  @media (max-width: 700px) {
+    .legend {
+      bottom: 36px;
+    }
+  }
   .legend-toggle {
     display: block;
     width: 100%;
@@ -201,9 +219,34 @@
     font-size: 12px;
     font-weight: bold;
     text-align: left;
+    white-space: nowrap;
   }
   .legend-toggle:hover {
     background: none;
+  }
+  /* Unfolds by animating its one row between 0fr and 1fr, so the height eases to fit the rows, and
+     its width between 0 and the rows' measured width, so folded it shrinks to the toggle. */
+  #legend-rows {
+    display: grid;
+    grid-template-rows: 1fr;
+    overflow: hidden;
+    transition:
+      grid-template-rows 0.2s ease,
+      width 0.2s ease,
+      visibility 0s;
+  }
+  #legend-rows.folded {
+    grid-template-rows: 0fr;
+    visibility: hidden;
+    transition:
+      grid-template-rows 0.2s ease,
+      width 0.2s ease,
+      visibility 0s 0.2s;
+  }
+  .legend-inner {
+    width: max-content;
+    min-height: 0;
+    overflow: hidden;
   }
   .legend-row {
     display: flex;
@@ -229,6 +272,10 @@
   @media (prefers-reduced-motion: reduce) {
     :global(.route-loading) {
       animation: none;
+    }
+    #legend-rows,
+    #legend-rows.folded {
+      transition: none;
     }
   }
   :global(.wp-marker) {

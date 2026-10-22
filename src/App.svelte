@@ -7,7 +7,7 @@
 
   // The route is mirrored into the URL hash, replacing the current history entry, so reloading,
   // going Back/Forward to the page or opening a shared link restores it.
-  // On mobile the planner sits under the map; folding it leaves the map the whole screen.
+  // Folding the planner leaves the map (almost) the whole screen; it starts folded on mobile.
   let plannerOpen = $state(!matchMedia(MOBILE_QUERY).matches);
 
   const initial = decodeRoute(location.hash);
@@ -48,7 +48,7 @@
 
 <svelte:window onhashchange={onHashChange} onpagehide={writeUrl} />
 
-<main class:folded={!plannerOpen}>
+<main>
   <Sidebar bind:open={plannerOpen} />
   <MapView />
 </main>
@@ -56,22 +56,19 @@
 <style>
   main {
     display: grid;
-    grid-template-columns: 340px 1fr;
+    grid-template-columns: auto 1fr;
+    /* minmax(0, …) keeps a long planner scrolling inside the row, rather than stretching it (and the map) past the screen. */
+    grid-template-rows: minmax(0, 1fr);
     height: 100dvh;
   }
+  /* On mobile the map fills the screen above the planner, shrinking as the planner unfolds. */
   @media (max-width: 700px) {
     main {
       grid-template-columns: 1fr;
-      grid-template-rows: 60dvh auto;
-      height: auto;
+      grid-template-rows: 1fr auto;
     }
     main > :global(aside) {
       order: 2;
-    }
-    /* Folded, only the planner's header shows below a map that fills the rest of the screen. */
-    main.folded {
-      grid-template-rows: 1fr auto;
-      height: 100dvh;
     }
   }
 </style>
