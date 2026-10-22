@@ -108,7 +108,13 @@
             [a.lat, a.lng],
             [b.lat, b.lng],
           ],
-          { color: leg.status === 'error' ? '#d62728' : '#999', weight: 3, dashArray: '4 6', interactive: false },
+          {
+            color: leg.status === 'error' ? '#d62728' : '#999',
+            weight: 3,
+            dashArray: '4 6',
+            interactive: false,
+            className: leg.status === 'loading' ? 'route-loading' : undefined,
+          },
         ).addTo(routeLayer);
       }
     });
@@ -170,6 +176,20 @@
     width: 22px;
     height: 4px;
     border-radius: 2px;
+  }
+  /* Marching-ants placeholder while a leg is routing; offset shifts by one dash period (4 + 6). */
+  :global(.route-loading) {
+    animation: route-ants 0.5s linear infinite;
+  }
+  @keyframes -global-route-ants {
+    to {
+      stroke-dashoffset: -10;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :global(.route-loading) {
+      animation: none;
+    }
   }
   :global(.wp-marker) {
     width: 26px;
