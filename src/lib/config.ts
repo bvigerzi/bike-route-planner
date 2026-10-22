@@ -31,3 +31,6 @@ export const BROUTER_THROTTLE = {
   rejectMaxMs: 30000,
   maxRetries: 3,
 };
+
+// Google Maps directions links take at most this many stops between origin and destination.
+export const MAX_GOOGLE_STOPS = 9;

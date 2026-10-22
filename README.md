@@ -21,6 +21,8 @@ yarn build      # static output in dist/
 - The summary shows distance, estimated time, ascent and the distance in each path type.
 - The route (waypoints, leg modes, place names and the **route name**) is kept in the page URL as you edit. Reloading, going Back/Forward to the page, bookmarking or sharing the link brings the route back. **Copy link** copies it. No server or account is involved.
 - **Save** keeps the route's name and link in browser localStorage, so it shows under *Saved routes* to load again later.
+- **Open in maps** opens cycling directions in a maps app, with every waypoint as a stop. On iPhone and iPad it uses an Apple Maps link, which iOS may pass to your default navigation app. Everywhere else it uses Google Maps, which opens its app on Android. Google Maps allows at most 9 stops between the start and the end, so the button is disabled for longer routes. The maps app does its own routing between stops, so *Direct* legs aren't kept.
+- **Download GPX** saves the exact routed track, with the waypoints, for bike apps such as Komoot, Strava, Garmin or OsmAnd.
 
 ### Route links
 

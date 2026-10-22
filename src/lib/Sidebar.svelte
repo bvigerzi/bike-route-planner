@@ -2,6 +2,8 @@
   import { fade } from 'svelte/transition';
   import { CATEGORIES, CATEGORY_ORDER } from './categories';
   import { DIRECT_SPEED_KMH, URL_WARN_LENGTH } from './config';
+  import { downloadGpx, toGpx } from './gpx';
+  import { MAPS_APP_NAME, MAX_STOPS, mapsUrl, preferredMapsApp } from './mapsLink';
   import { decodeRoute, encodeRoute } from './routeUrl';
   import SearchBox from './SearchBox.svelte';
   import { planner } from './state.svelte';
@@ -17,6 +19,8 @@
   const hash = $derived(encodeRoute(planner.toState()));
   // A route that has never been saved, or differs from its saved entry, has unsaved changes.
   const unsaved = $derived(saved.find((r) => r.id === planner.savedId)?.hash !== hash);
+  const mapsApp = preferredMapsApp();
+  const mapsHref = $derived(mapsUrl(mapsApp, planner.waypoints));
   const linkLength = $derived(location.origin.length + location.pathname.length + location.search.length + 1 + hash.length);
 
   const km = (m: number) => `${(m / 1000).toFixed(1)} km`;
@@ -74,6 +78,11 @@
     } catch {
       // Clipboard unavailable (e.g. insecure context); the address bar still has the link.
     }
+  }
+
+  function exportGpx() {
+    const legs = planner.legs.flatMap((l) => (l.result ? [l.result] : []));
+    downloadGpx(planner.name || 'route', toGpx(planner.name, planner.waypoints, legs));
   }
 
   async function optimise() {
@@ -193,6 +202,30 @@
           </button>
         </form>
         {#if saveError}<p class="error">{saveError}</p>{/if}
+        <div class="row nav">
+          {#if mapsHref}
+            <a
+              class="button"
+              href={mapsHref}
+              target="_blank"
+              rel="noopener"
+              title="Cycling directions in {MAPS_APP_NAME[mapsApp]}, with each waypoint as a stop. Direct legs are routed by the app."
+            >
+              Open in maps
+            </a>
+          {:else}
+            <button type="button" disabled>Open in maps</button>
+          {/if}
+          <button type="button" title="Download the route as a GPX file for bike apps such as Komoot, Strava or Garmin" onclick={exportGpx}>
+            Download GPX
+          </button>
+        </div>
+        {#if !mapsHref}
+          <p class="error">
+            {MAPS_APP_NAME[mapsApp]} allows up to {MAX_STOPS[mapsApp]} stops (this route has {planner.waypoints.length - 2}).
+            Try Optimise, or Download GPX for a bike app.
+          </p>
+        {/if}
       {/if}
     </section>
   {/if}
@@ -307,6 +340,22 @@
   .row {
     display: flex;
     gap: 6px;
+  }
+  .row.nav {
+    margin-top: 6px;
+  }
+  /* A link (so mobile opens the maps app) that looks like the buttons beside it. */
+  a.button {
+    font-size: 13px;
+    padding: 4px 10px;
+    border: 1px solid #bbb;
+    border-radius: 4px;
+    background: #f7f7f7;
+    color: inherit;
+    text-decoration: none;
+  }
+  a.button:hover {
+    background: #eee;
   }
   .name {
     width: 100%;
