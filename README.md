@@ -49,7 +49,7 @@ Classification rules are in `src/lib/categories.ts`.
 - **Map:** [Leaflet](https://leafletjs.com) with standard OSM raster tiles.
 - **Routing:** the public [BRouter](https://brouter.de) instance, `safety` profile. No API key is needed. Each leg is routed on its own and cached. BRouter returns the OSM tags for every section of a leg, and the app uses them to choose the colour. Time and ascent come from BRouter. Direct legs are estimated at 15 km/h.
 - **Rate limiting:** BRouter documents no rate limit, but brouter.de answers 403 if it gets too many requests. So the app sends BRouter requests one at a time (`src/lib/throttle.ts`). During a burst, such as rapid clicking or Optimise, the gap between requests doubles from 250 ms up to 2 s. Points show on the map straight away, and their legs stay grey and dotted until routed. After a 403 or 429, the app waits 2 s, doubling up to 30 s, and retries up to 3 times.
-- **Search:** [Nominatim](https://nominatim.org). It searches only when you submit, as its usage policy requires.
+- **Search:** [Photon](https://photon.komoot.io), which searches OpenStreetMap as you type. Results favour the area the map is showing. Requests wait for a 350 ms pause in typing and need at least 3 characters; Enter searches straight away.
 
 Settings (router URL, profile, direct-leg speed, snap radius, default map centre) are in `src/lib/config.ts`.
 
@@ -60,6 +60,5 @@ Settings (router URL, profile, direct-leg speed, snap radius, default map centre
 - A global "allow footpaths" toggle, using a custom BRouter profile.
 - Self-hosting BRouter if the public instance becomes a limitation.
 - Self-hosting Overpass (Australia extract) for waypoint snapping. Snapping currently uses BRouter, which finds the nearest way its profile can ride but doesn't say what kind of way it is, so it can't prefer a bike path over a closer road. Overpass returns each way's tags, which would allow that. Public Overpass instances were too slow and unreliable for snapping on every click: in testing, most queries took 20–40 s or timed out after 60 s. None is hosted near Australia. Send a descriptive `User-Agent` header, or the public instances reject requests with 406.
-- Search-as-you-type using Photon.
 - A modifier key (e.g. Alt+click) to place a point exactly, without snapping.
 - GPX export.

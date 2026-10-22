@@ -1,22 +1,48 @@
 <script lang="ts">
+  import { SEARCH_DEBOUNCE_MS, SEARCH_MIN_CHARS } from './config';
   import { searchPlaces, type Place } from './geocode';
   import { planner } from './state.svelte';
 
   let query = $state('');
   let results = $state<Place[]>([]);
   let status = $state('');
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let inflight: AbortController | undefined;
 
-  async function search(e: SubmitEvent) {
-    e.preventDefault();
-    if (!query.trim()) return;
+  async function run(q: string) {
+    clearTimeout(timer);
+    inflight?.abort();
+    const ctrl = (inflight = new AbortController());
     status = 'Searching…';
     try {
-      results = await searchPlaces(query.trim(), planner.view);
-      status = results.length ? '' : 'No results';
+      const found = await searchPlaces(q, planner.view, ctrl.signal);
+      if (ctrl !== inflight) return;
+      results = found;
+      status = found.length ? '' : 'No results';
     } catch (err) {
+      if (ctrl !== inflight) return;
       results = [];
       status = (err as Error).message;
     }
+  }
+
+  /** Search as you type, once typing pauses. */
+  function oninput() {
+    clearTimeout(timer);
+    const q = query.trim();
+    if (q.length < SEARCH_MIN_CHARS) {
+      inflight?.abort();
+      results = [];
+      status = '';
+      return;
+    }
+    timer = setTimeout(() => run(q), SEARCH_DEBOUNCE_MS);
+  }
+
+  /** Enter searches straight away. */
+  function search(e: SubmitEvent) {
+    e.preventDefault();
+    if (query.trim()) void run(query.trim());
   }
 
   function pick(place: Place, asStart: boolean) {
@@ -24,13 +50,16 @@
     if (asStart) planner.setStart(place.lat, place.lng, label);
     else planner.addWaypoint(place.lat, place.lng, label);
     planner.focus = [[place.lat, place.lng]];
+    clearTimeout(timer);
+    inflight?.abort();
     results = [];
+    status = '';
     query = '';
   }
 </script>
 
 <form onsubmit={search}>
-  <input type="search" placeholder="Search a place or address…" bind:value={query} />
+  <input type="search" placeholder="Search a place or address…" bind:value={query} {oninput} />
   <button type="submit">Search</button>
 </form>
 {#if status}<p class="muted">{status}</p>{/if}

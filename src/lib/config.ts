@@ -2,7 +2,11 @@ export const BROUTER_URL = 'https://brouter.de/brouter';
 // 'safety' prefers cycleways and quiet roads; alternatives: 'trekking', 'fastbike'.
 export const BROUTER_PROFILE = 'safety';
 
-export const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
+// Photon (OSM data, by Komoot) allows search-as-you-type, which Nominatim's usage policy forbids.
+export const PHOTON_URL = 'https://photon.komoot.io/api/';
+// Search runs once typing pauses for this long, and only when the query has at least this many characters.
+export const SEARCH_DEBOUNCE_MS = 350;
+export const SEARCH_MIN_CHARS = 3;
 
 // BRouter gives no time for direct (user override) legs, so estimate them at this speed.
 export const DIRECT_SPEED_KMH = 15;
