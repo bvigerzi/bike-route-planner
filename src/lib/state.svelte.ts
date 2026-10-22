@@ -14,6 +14,8 @@ export interface LegState {
 
 class Planner {
   name = $state('');
+  /** Id of the saved route being edited, if the route was loaded from (or saved to) the saved list. */
+  savedId = $state<string | null>(null);
   /** Index 0 is the start / meeting point. */
   waypoints = $state<Waypoint[]>([]);
   /** legModes[i] is the mode of the leg from waypoints[i] to waypoints[i + 1]. */
@@ -94,6 +96,7 @@ class Planner {
 
   clear() {
     this.name = '';
+    this.savedId = null;
     this.waypoints = [];
     this.legModes = [];
     this.snapping.clear();
@@ -156,8 +159,9 @@ class Planner {
   }
 
   /** Replace the route. Its points are taken as already snapped. */
-  load(state: RouteState) {
+  load(state: RouteState, savedId: string | null = null) {
     this.snapping.clear();
+    this.savedId = savedId;
     this.name = state.name;
     this.waypoints = state.waypoints.map(({ lat, lng, label }) => ({ id: crypto.randomUUID(), lat, lng, label }));
     this.legModes = [...state.legModes];

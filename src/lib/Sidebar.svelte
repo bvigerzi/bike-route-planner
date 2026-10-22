@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fade } from 'svelte/transition';
   import { CATEGORIES, CATEGORY_ORDER } from './categories';
   import { DIRECT_SPEED_KMH, URL_WARN_LENGTH } from './config';
   import { decodeRoute, encodeRoute } from './routeUrl';
@@ -10,8 +11,12 @@
   let saveError = $state('');
   let optimiseResult = $state('');
   let copied = $state(false);
+  let justSaved = $state(false);
+  let justSavedTimer: ReturnType<typeof setTimeout> | undefined;
 
   const hash = $derived(encodeRoute(planner.toState()));
+  // A route that has never been saved, or differs from its saved entry, has unsaved changes.
+  const unsaved = $derived(saved.find((r) => r.id === planner.savedId)?.hash !== hash);
   const linkLength = $derived(location.origin.length + location.pathname.length + location.search.length + 1 + hash.length);
 
   const km = (m: number) => `${(m / 1000).toFixed(1)} km`;
@@ -23,18 +28,25 @@
 
   function save(e: SubmitEvent) {
     e.preventDefault();
+    const asCopy = (e.submitter as HTMLButtonElement | null)?.value === 'copy';
     planner.name = planner.name.trim() || `Route ${new Date().toLocaleString()}`;
+    const existing = asCopy ? undefined : saved.find((r) => r.id === planner.savedId);
     const route: SavedRoute = {
-      id: crypto.randomUUID(),
+      id: existing?.id ?? crypto.randomUUID(),
       name: planner.name,
-      createdAt: new Date().toISOString(),
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
       hash: encodeRoute(planner.toState()),
       distanceM: planner.totals.distanceM,
     };
-    const next = [route, ...saved];
+    // Editing replaces the saved entry in place; otherwise (or if it was deleted) add a new one.
+    const next = existing ? saved.map((r) => (r.id === existing.id ? route : r)) : [route, ...saved];
     if (saveRoutes(next)) {
       saved = next;
+      planner.savedId = route.id;
       saveError = '';
+      justSaved = true;
+      clearTimeout(justSavedTimer);
+      justSavedTimer = setTimeout(() => (justSaved = false), 1000);
     } else {
       saveError = 'Could not save — browser storage is unavailable or full.';
     }
@@ -43,12 +55,15 @@
   function remove(route: SavedRoute) {
     if (!confirm(`Delete "${route.name}"?`)) return;
     const next = saved.filter((r) => r.id !== route.id);
-    if (saveRoutes(next)) saved = next;
+    if (saveRoutes(next)) {
+      saved = next;
+      if (planner.savedId === route.id) planner.savedId = null;
+    }
   }
 
   function load(route: SavedRoute) {
     const state = decodeRoute(route.hash);
-    if (state) planner.load(state);
+    if (state) planner.load(state, route.id);
   }
 
   async function copyLink() {
@@ -159,8 +174,20 @@
       {/if}
 
       {#if planner.totals.complete}
+        {#if unsaved}
+          <p class="error">Unsaved changes</p>
+        {:else if justSaved}
+          <p class="success" transition:fade={{ duration: 200 }}>Changes saved successfully!</p>
+        {/if}
         <form class="row" onsubmit={save}>
-          <button type="submit" title="Keep a link to this route in this browser">Save</button>
+          {#if planner.savedId}
+            <button type="submit" title="Update the saved route" disabled={!unsaved}>Save</button>
+            <button type="submit" value="copy" title="Save this route as a new entry, leaving the original unchanged">
+              Save as copy
+            </button>
+          {:else}
+            <button type="submit" title="Keep a link to this route in this browser">Save</button>
+          {/if}
           <button type="button" title="Copy a link to this route to share" onclick={copyLink}>
             {copied ? 'Copied' : 'Copy link'}
           </button>
@@ -317,6 +344,10 @@
   }
   .error {
     color: #c0392b;
+    font-size: 12px;
+  }
+  .success {
+    color: #27ae60;
     font-size: 12px;
   }
 </style>
