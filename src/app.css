@@ -44,6 +44,13 @@
   --tile-filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.85);
 }
 
+/* The cross-fade when switching theme (see toggleDark). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.3s;
+  animation-timing-function: ease;
+}
+
 html,
 body {
   margin: 0;
