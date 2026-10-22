@@ -50,11 +50,12 @@ class Planner {
     };
   });
 
-  addWaypoint(lat: number, lng: number, label?: string) {
+  /** Append a waypoint, reached by a leg of the given mode. */
+  addWaypoint(lat: number, lng: number, label?: string, mode: LegMode = 'route') {
     [lat, lng] = [roundCoord(lat), roundCoord(lng)];
     const id = crypto.randomUUID();
     this.waypoints.push({ id, lat, lng, label });
-    if (this.waypoints.length > 1) this.legModes.push('route');
+    if (this.waypoints.length > 1) this.legModes.push(mode);
     this.snap(id, { lat, lng });
   }
 

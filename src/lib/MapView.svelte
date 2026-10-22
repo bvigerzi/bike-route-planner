@@ -39,6 +39,11 @@
       }
       planner.addWaypoint(e.latlng.lat, e.latlng.lng);
     });
+    // Right-click adds a waypoint reached by a direct (straight line) leg.
+    m.on('contextmenu', (e: L.LeafletMouseEvent) => {
+      L.DomEvent.preventDefault(e.originalEvent);
+      planner.addWaypoint(e.latlng.lat, e.latlng.lng, undefined, 'direct');
+    });
     updateView();
     map = m;
     return () => m.remove();

@@ -76,7 +76,7 @@
     <p class="muted hint">
       {planner.waypoints.length === 0
         ? 'Click the map to set the start / meeting point.'
-        : 'Click the map to add waypoints. Drag markers to move them.'}
+        : 'Click the map to add waypoints, or right-click to add one reached by a direct line. Drag markers to move them.'}
     </p>
   </section>
 
