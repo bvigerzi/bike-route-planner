@@ -6,6 +6,7 @@
   import { CATEGORIES, CATEGORY_ORDER } from './categories';
   import { DEFAULT_CENTER, DEFAULT_ZOOM, MOBILE_QUERY, NOTICE_MS, TILE_URL, WHEEL_PX_PER_ZOOM_LEVEL } from './config';
   import { planner } from './state.svelte';
+  import { undoShortcutLabel } from './shortcuts';
   import { theme, toggleDark } from './theme.svelte';
 
   // All Leaflet usage lives in this component so the map library can be swapped later.
@@ -205,9 +206,40 @@
   <div class="notice-wrap" role="status">
     {#if noticeText}<div class="notice" transition:fade={{ duration: 200 }}>{noticeText}</div>{/if}
   </div>
-  <button class="theme-toggle" aria-label="Dark mode" aria-pressed={theme.dark} title="Dark mode" onclick={toggleDark}>
+  <button class="map-button theme-toggle" aria-label="Dark mode" aria-pressed={theme.dark} title="Dark mode" onclick={toggleDark}>
     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
       <circle cx="8" cy="8" r="6.5" fill={theme.dark ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.5" />
+    </svg>
+  </button>
+  <!-- Mobile only: the planner (and its Undo and Clear) is usually folded away there, and stray taps are easier to make. -->
+  <button
+    class="map-button undo-button"
+    aria-label="Undo"
+    title="Revert the last change ({undoShortcutLabel()})"
+    disabled={planner.optimising || !planner.canUndo}
+    onclick={() => planner.undo()}
+  >
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <path d="M5.5 3 2 6.5 5.5 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M2.5 6.5H10a4 4 0 0 1 0 8H7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+    </svg>
+  </button>
+  <button
+    class="map-button clear-button"
+    aria-label="Clear"
+    title="Clear"
+    disabled={planner.optimising || !planner.waypoints.length}
+    onclick={() => planner.clear()}
+  >
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <path
+        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9.5h6.6L12 4M6.75 6.5v4.5M9.25 6.5v4.5"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
     </svg>
   </button>
   <div class="legend">
@@ -312,9 +344,8 @@
     text-align: center;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   }
-  .theme-toggle {
+  .map-button {
     position: absolute;
-    top: 10px;
     right: 10px;
     z-index: 1000;
     width: 32px;
@@ -329,8 +360,19 @@
     justify-content: center;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   }
-  .theme-toggle:hover {
+  .map-button:hover:not(:disabled) {
     background: var(--bg);
+  }
+  .map-button:disabled {
+    color: var(--border);
+    cursor: default;
+  }
+  .theme-toggle {
+    top: 10px;
+  }
+  .undo-button,
+  .clear-button {
+    display: none;
   }
   /* Clear of the planner's tab, which overlaps the bottom of the map on mobile. */
   @media (max-width: 700px) {
@@ -341,6 +383,16 @@
     .theme-toggle,
     .notice-wrap {
       top: 28px;
+    }
+    .undo-button,
+    .clear-button {
+      display: flex;
+    }
+    .undo-button {
+      top: 68px;
+    }
+    .clear-button {
+      top: 108px;
     }
   }
   .legend-toggle {
