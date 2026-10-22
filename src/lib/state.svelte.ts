@@ -371,3 +371,8 @@ class Planner {
 }
 
 export const planner = new Planner();
+
+/** What an optimise that removed this many waypoints did, for the user. */
+export function optimiseResultText(removed: number): string {
+  return removed ? `Removed ${removed} unneeded waypoint${removed === 1 ? '' : 's'}.` : 'No waypoints were removed - route already optimised.';
+}

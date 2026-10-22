@@ -5,7 +5,7 @@
   import { fade } from 'svelte/transition';
   import { CATEGORIES, CATEGORY_ORDER } from './categories';
   import { DEFAULT_CENTER, DEFAULT_ZOOM, MOBILE_QUERY, NOTICE_MS, TILE_URL, WHEEL_PX_PER_ZOOM_LEVEL } from './config';
-  import { planner } from './state.svelte';
+  import { optimiseResultText, planner } from './state.svelte';
   import { undoShortcutLabel } from './shortcuts';
   import { theme, toggleDark } from './theme.svelte';
 
@@ -177,13 +177,30 @@
 
   // Each new notice shows for NOTICE_MS, restarting the timer if one is already showing.
   let noticeText = $state('');
+  let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+  function showNotice(text: string) {
+    noticeText = text;
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => (noticeText = ''), NOTICE_MS);
+  }
   $effect(() => {
     const n = planner.notice;
-    if (!n) return;
-    noticeText = n.text;
-    const t = setTimeout(() => (noticeText = ''), NOTICE_MS);
-    return () => clearTimeout(t);
+    if (n) showNotice(n.text);
   });
+  $effect(() => () => clearTimeout(noticeTimer));
+
+  // An optimise started here shows until it finishes, behind any notice it refuses an edit with.
+  let optimisingHere = $state(false);
+  const shownNotice = $derived(noticeText || (optimisingHere ? 'Optimising route…' : ''));
+
+  // The planner, where optimise reports its result, is usually folded on mobile, so report it here too.
+  async function optimise() {
+    optimisingHere = true;
+    const removed = await planner.optimise();
+    // Swapped in the same update, so the notice doesn't flicker out between them.
+    optimisingHere = false;
+    showNotice(optimiseResultText(removed));
+  }
 
   // Nothing to fit until there is a waypoint.
   $effect(() => {
@@ -204,14 +221,17 @@
 <div class="map-wrap">
   <div class="map" bind:this={container}></div>
   <div class="notice-wrap" role="status">
-    {#if noticeText}<div class="notice" transition:fade={{ duration: 200 }}>{noticeText}</div>{/if}
+    <!-- Keyed by text, so a change fades the old notice out as the new one fades in over it. -->
+    {#each shownNotice ? [shownNotice] : [] as text (text)}
+      <div class="notice" transition:fade={{ duration: 200 }}>{text}</div>
+    {/each}
   </div>
   <button class="map-button theme-toggle" aria-label="Dark mode" aria-pressed={theme.dark} title="Dark mode" onclick={toggleDark}>
     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
       <circle cx="8" cy="8" r="6.5" fill={theme.dark ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.5" />
     </svg>
   </button>
-  <!-- Mobile only: the planner (and its Undo and Clear) is usually folded away there, and stray taps are easier to make. -->
+  <!-- Mobile only: the planner (and its Undo, Clear and Optimise) is usually folded away there, and stray taps are easier to make. -->
   <button
     class="map-button undo-button"
     aria-label="Undo"
@@ -240,6 +260,27 @@
         stroke-linecap="round"
         stroke-linejoin="round"
       />
+    </svg>
+  </button>
+  <button
+    class="map-button optimise-button"
+    aria-label="Optimise"
+    title="Remove waypoints that don't change the route"
+    disabled={planner.optimising || planner.waypoints.length < 3}
+    aria-busy={planner.optimising}
+    onclick={optimise}
+  >
+    <!-- A broom sweeping down-left, with a sparkle. -->
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <path
+        d="M14 2 8.25 7.75M7 6.5 9.5 9 7.5 13.5 2.5 8.5ZM7.8 7.3 4.2 10.2M8.7 8.2 5.8 11.8"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+      <path d="M3.5 1 4.2 2.8 6 3.5 4.2 4.2 3.5 6 2.8 4.2 1 3.5 2.8 2.8Z" fill="currentColor" />
     </svg>
   </button>
   <div class="legend">
@@ -335,8 +376,11 @@
     width: max-content;
     max-width: calc(100% - 120px);
     pointer-events: none;
+    display: grid;
+    justify-items: center;
   }
   .notice {
+    grid-area: 1 / 1;
     background: var(--overlay-bg);
     padding: 8px 12px;
     border-radius: 6px;
@@ -371,7 +415,8 @@
     top: 10px;
   }
   .undo-button,
-  .clear-button {
+  .clear-button,
+  .optimise-button {
     display: none;
   }
   /* Clear of the planner's tab, which overlaps the bottom of the map on mobile. */
@@ -385,7 +430,8 @@
       top: 28px;
     }
     .undo-button,
-    .clear-button {
+    .clear-button,
+    .optimise-button {
       display: flex;
     }
     .undo-button {
@@ -393,6 +439,9 @@
     }
     .clear-button {
       top: 108px;
+    }
+    .optimise-button {
+      top: 148px;
     }
   }
   .legend-toggle {

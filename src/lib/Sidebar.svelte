@@ -9,7 +9,7 @@
   import { decodeRoute, encodeRoute } from './routeUrl';
   import SearchBox from './SearchBox.svelte';
   import { undoShortcutLabel } from './shortcuts';
-  import { planner } from './state.svelte';
+  import { optimiseResultText, planner } from './state.svelte';
   import { loadRoutes, saveRoutes, type SavedRoute, type Waypoint } from './storage';
 
   // Folding slides the planner off the map: to the left on desktop, down to its title on mobile.
@@ -109,7 +109,7 @@
   async function optimise() {
     optimiseResult = '';
     const removed = await planner.optimise();
-    optimiseResult = removed ? `Removed ${removed} unneeded waypoint${removed === 1 ? '' : 's'}.` : 'No waypoints were removed - route already optimised.';
+    optimiseResult = optimiseResultText(removed);
   }
 </script>
 
