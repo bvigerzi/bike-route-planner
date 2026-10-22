@@ -128,7 +128,7 @@
               <input class="name" placeholder="Route name" bind:value={planner.name} />
               <ol class="waypoints">
                 {#each planner.waypoints as wp, i (wp.id)}
-                  {@const isEnd = planner.loop && i === planner.waypoints.length - 1}
+                  {@const isEnd = i > 0 && i === planner.waypoints.length - 1}
                   <li>
                     <span class="badge" class:start={i === 0 || isEnd}>{i === 0 ? 'S' : isEnd ? 'E' : i}</span>
                     <span class="wp-label">{wpLabel(wp)}</span>

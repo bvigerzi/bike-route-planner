@@ -75,11 +75,12 @@
       // The end of a loop sits under the start marker, which stands for both.
       if (loop && i === count - 1) return;
       const isStart = i === 0;
+      const isEnd = !isStart && i === count - 1;
       // Clicking the start closes the route into a loop, once there is somewhere to loop from.
       const closesLoop = isStart && !loop && count > 1;
       const icon = L.divIcon({
         className: '',
-        html: `<div class="wp-marker${isStart ? ' start' : ''}${isStart && loop ? ' loop' : ''}">${isStart ? (loop ? 'S/E' : 'S') : i}</div>`,
+        html: `<div class="wp-marker${isStart || isEnd ? ' start' : ''}${isStart && loop ? ' loop' : ''}">${isStart ? (loop ? 'S/E' : 'S') : isEnd ? 'E' : i}</div>`,
         iconSize: [26, 26],
         iconAnchor: [13, 13],
         popupAnchor: [0, -13],
@@ -89,7 +90,7 @@
       removeBtn.type = 'button';
       removeBtn.textContent = isStart && loop ? 'Remove end?' : 'Remove?';
       removeBtn.onclick = () => planner.removeWaypoint(wp.id);
-      const name = isStart ? (loop ? 'Start / end point' : 'Start / meeting point') : `Waypoint ${i}`;
+      const name = isStart ? (loop ? 'Start / end point' : 'Start / meeting point') : isEnd ? 'End point' : `Waypoint ${i}`;
       const marker = L.marker([wp.lat, wp.lng], { icon, draggable: true })
         .bindTooltip(
           closesLoop
