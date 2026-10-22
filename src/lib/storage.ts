@@ -1,4 +1,4 @@
-import { decodeRoute, encodeRoute } from './routeUrl';
+import { decodeRoute, encodeRoute, type RouteState } from './routeUrl';
 import { legCache, type LegMode, type LegResult } from './routing';
 
 export interface Waypoint {
@@ -70,4 +70,10 @@ export function saveRoutes(routes: SavedRoute[]): boolean {
       return false;
     }
   }
+}
+
+/** Id of the saved route matching this one exactly, so opening its link edits it rather than starting a new route. */
+export function findSavedId(state: RouteState): string | null {
+  const hash = encodeRoute(state);
+  return loadRoutes().find((r) => r.hash === hash)?.id ?? null;
 }

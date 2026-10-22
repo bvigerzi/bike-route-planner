@@ -74,8 +74,13 @@ button {
   cursor: pointer;
 }
 
-button:hover {
+button:hover:not(:disabled) {
   background: var(--button-hover);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 input {

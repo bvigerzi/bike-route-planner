@@ -5,6 +5,7 @@
   import { inTextField, isUndoShortcut } from './lib/shortcuts';
   import Sidebar from './lib/Sidebar.svelte';
   import { planner } from './lib/state.svelte';
+  import { findSavedId } from './lib/storage';
 
   // The route is mirrored into the URL hash, replacing the current history entry, so reloading,
   // going Back/Forward to the page or opening a shared link restores it.
@@ -12,7 +13,7 @@
   let plannerOpen = $state(!matchMedia(MOBILE_QUERY).matches);
 
   const initial = decodeRoute(location.hash);
-  if (initial) planner.load(initial);
+  if (initial) planner.load(initial, findSavedId(initial));
 
   // Debounced: Safari throws if history is replaced more than ~100 times in 10 s (e.g. typing a name).
   let pending: string | null = null;
@@ -42,7 +43,7 @@
     clearTimeout(timer);
     pending = null;
     const state = decodeRoute(location.hash);
-    if (state) planner.load(state);
+    if (state) planner.load(state, findSavedId(state));
     else planner.clear();
   }
 
