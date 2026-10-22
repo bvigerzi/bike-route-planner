@@ -47,6 +47,10 @@ export const OPTIMISE_TOLERANCE_M = 10;
 // New waypoints move onto the nearest rideable way if it is within this many metres; otherwise they stay where placed.
 export const SNAP_RADIUS_M = 30;
 
+// On touch screens a tap adds its waypoint only after this long with no second tap, so a double tap can zoom
+// instead. Roughly the gap browsers allow between the taps of a double tap.
+export const DOUBLE_TAP_MS = 300;
+
 // A waypoint's user-given name is kept when it is dragged up to this many metres (a nudge), and removed
 // when it is dragged further (it is then somewhere else). Measured from where that drag started.
 export const NAME_ALLOWED_RADIUS_M = 150;

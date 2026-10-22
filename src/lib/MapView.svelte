@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
   import { fade } from 'svelte/transition';
   import { CATEGORIES, CATEGORY_ORDER } from './categories';
-  import { DEFAULT_CENTER, DEFAULT_ZOOM, MOBILE_QUERY, NOTICE_MS, TILE_URL, WHEEL_PX_PER_ZOOM_LEVEL } from './config';
+  import { DEFAULT_CENTER, DEFAULT_ZOOM, DOUBLE_TAP_MS, MOBILE_QUERY, NOTICE_MS, TILE_URL, WHEEL_PX_PER_ZOOM_LEVEL } from './config';
   import { optimiseResultText, planner } from './state.svelte';
   import { undoShortcutLabel } from './shortcuts';
   import { theme, toggleDark } from './theme.svelte';
@@ -47,12 +47,30 @@
     m.on('popupopen', () => (popupOpen = true));
     m.on('popupclose', () => (popupOpen = false));
     m.on('preclick', () => (dismissing = popupOpen));
+    // A double tap zooms (Leaflet's doubleClickZoom), so on touch a tap waits to see whether a second follows
+    // before adding its waypoint. Mouse clicks add at once, as a double click is rarely meant as a zoom there.
+    let lastPointerType = '';
+    L.DomEvent.on(container, 'pointerdown', (e) => (lastPointerType = (e as PointerEvent).pointerType));
+    let pendingTap: ReturnType<typeof setTimeout> | undefined;
     m.on('click', (e: L.LeafletMouseEvent) => {
       if (dismissing) {
         dismissing = false;
         return;
       }
-      planner.addWaypoint(e.latlng.lat, e.latlng.lng);
+      if (lastPointerType !== 'touch') {
+        planner.addWaypoint(e.latlng.lat, e.latlng.lng);
+        return;
+      }
+      if (pendingTap !== undefined) {
+        // The second tap of a double tap: neither tap adds a waypoint.
+        clearTimeout(pendingTap);
+        pendingTap = undefined;
+        return;
+      }
+      pendingTap = setTimeout(() => {
+        pendingTap = undefined;
+        planner.addWaypoint(e.latlng.lat, e.latlng.lng);
+      }, DOUBLE_TAP_MS);
     });
     // Right-click adds a waypoint reached by a direct (straight line) leg.
     m.on('contextmenu', (e: L.LeafletMouseEvent) => {
@@ -85,6 +103,7 @@
     mobile.addEventListener('change', placeAttribution);
     return () => {
       mobile.removeEventListener('change', placeAttribution);
+      clearTimeout(pendingTap);
       resize.disconnect();
       m.remove();
     };
