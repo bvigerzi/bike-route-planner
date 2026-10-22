@@ -8,6 +8,7 @@
   import { renderRouteImage } from './routeImage';
   import { decodeRoute, encodeRoute } from './routeUrl';
   import SearchBox from './SearchBox.svelte';
+  import { undoShortcutLabel } from './shortcuts';
   import { planner } from './state.svelte';
   import { loadRoutes, saveRoutes, type SavedRoute, type Waypoint } from './storage';
 
@@ -174,7 +175,7 @@
                 {/each}
               </ol>
               <div class="row">
-                <button disabled={planner.optimising} onclick={() => planner.undo()}>Undo last</button>
+                <button disabled={planner.optimising || !planner.canUndo} title="Revert the last change ({undoShortcutLabel()})" onclick={() => planner.undo()}>Undo</button>
                 <button disabled={planner.optimising} onclick={() => planner.clear()}>Clear</button>
                 <button
                   disabled={planner.optimising || planner.waypoints.length < 3}
@@ -188,6 +189,12 @@
               {#if linkLength > URL_WARN_LENGTH}
                 <p class="error">Link is {linkLength} characters — some apps may truncate it. Try Optimise to remove waypoints.</p>
               {/if}
+            </section>
+          {:else if planner.canUndo}
+            <section>
+              <div class="row">
+                <button title="Revert the last change ({undoShortcutLabel()})" onclick={() => planner.undo()}>Undo</button>
+              </div>
             </section>
           {/if}
 

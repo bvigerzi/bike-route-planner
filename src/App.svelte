@@ -2,6 +2,7 @@
   import { MOBILE_QUERY } from './lib/config';
   import MapView from './lib/MapView.svelte';
   import { decodeRoute, encodeRoute } from './lib/routeUrl';
+  import { inTextField, isUndoShortcut } from './lib/shortcuts';
   import Sidebar from './lib/Sidebar.svelte';
   import { planner } from './lib/state.svelte';
 
@@ -44,9 +45,16 @@
     if (state) planner.load(state);
     else planner.clear();
   }
+
+  // Text fields keep their own undo.
+  function onKeyDown(e: KeyboardEvent) {
+    if (!isUndoShortcut(e) || inTextField(e.target)) return;
+    e.preventDefault();
+    if (!planner.optimising) planner.undo();
+  }
 </script>
 
-<svelte:window onhashchange={onHashChange} onpagehide={writeUrl} />
+<svelte:window onhashchange={onHashChange} onpagehide={writeUrl} onkeydown={onKeyDown} />
 
 <main>
   <Sidebar bind:open={plannerOpen} />

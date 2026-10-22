@@ -1,6 +1,6 @@
 import { CATEGORY_ORDER, type Category } from './categories';
 import type { Viewbox } from './geocode';
-import { OPTIMISE_TOLERANCE_M, SNAP_RADIUS_M } from './config';
+import { OPTIMISE_TOLERANCE_M, SNAP_RADIUS_M, UNDO_LIMIT } from './config';
 import { roundCoord, type RouteState } from './routeUrl';
 import { directLeg, legKey, pathLength, routeLeg, samePath, snapToPath, type LatLng, type LegMode, type LegResult } from './routing';
 import type { Waypoint } from './storage';
@@ -10,6 +10,17 @@ export interface LegState {
   status: 'loading' | 'ok' | 'error';
   result?: LegResult;
   error?: string;
+}
+
+/** The route as it was before an edit, for undo. */
+interface Snapshot {
+  waypoints: Waypoint[];
+  legModes: LegMode[];
+  loop: boolean;
+  /** Waypoints that were still waiting to snap, with the position requested. */
+  snapping: [string, LatLng][];
+  /** Set by edits that replace the whole route (clear, load), which also change these. */
+  doc?: { name: string; savedId: string | null };
 }
 
 class Planner {
@@ -31,6 +42,10 @@ class Planner {
   optimising = $state(false);
   /** Waypoints waiting to snap onto a path, by id, with the position the snap was requested for. */
   private snapping = new Map<string, LatLng>();
+  /** Earlier states of the route, most recent last. */
+  private history = $state.raw<Snapshot[]>([]);
+
+  canUndo = $derived(this.history.length > 0);
 
   totals = $derived.by(() => {
     const byCategory = Object.fromEntries(CATEGORY_ORDER.map((c) => [c, 0])) as Record<Category, number>;
@@ -56,6 +71,7 @@ class Planner {
 
   /** Append a waypoint, reached by a leg of the given mode. */
   addWaypoint(lat: number, lng: number, label?: string, mode: LegMode = 'route') {
+    this.record();
     [lat, lng] = [roundCoord(lat), roundCoord(lng)];
     const id = crypto.randomUUID();
     if (this.loop) {
@@ -72,6 +88,7 @@ class Planner {
   /** Return to the start by adding a final waypoint at the start's position. */
   closeLoop() {
     if (this.loop || this.waypoints.length < 2) return;
+    this.record();
     const { lat, lng, label } = this.waypoints[0];
     this.waypoints.push({ id: crypto.randomUUID(), lat, lng, label });
     this.legModes.push('route');
@@ -81,6 +98,7 @@ class Planner {
 
   setStart(lat: number, lng: number, label?: string) {
     if (this.waypoints.length === 0) return this.addWaypoint(lat, lng, label);
+    this.record();
     [lat, lng] = [roundCoord(lat), roundCoord(lng)];
     const id = crypto.randomUUID();
     this.snapping.delete(this.waypoints[0].id);
@@ -92,6 +110,7 @@ class Planner {
   moveWaypoint(id: string, lat: number, lng: number) {
     const wp = this.waypoints.find((w) => w.id === id);
     if (!wp) return;
+    this.record();
     [lat, lng] = [roundCoord(lat), roundCoord(lng)];
     wp.lat = lat;
     wp.lng = lng;
@@ -100,8 +119,41 @@ class Planner {
     this.snap(id, { lat, lng });
   }
 
-  /** Removing the start of a loop removes the end first, reopening the loop. */
   removeWaypoint(id: string) {
+    if (!this.waypoints.some((w) => w.id === id)) return;
+    this.record();
+    this.remove(id);
+  }
+
+  /** Revert the last edit. */
+  undo() {
+    // Skip states the route is already in, e.g. from an optimise that removed nothing.
+    const current = JSON.stringify(this.snapshot());
+    const same = (s: Snapshot) => !s.doc && JSON.stringify(s) === current;
+    let n = this.history.length;
+    while (n > 0 && same(this.history[n - 1])) n--;
+    if (n === 0) {
+      this.history = [];
+      return;
+    }
+    const prev = this.history[n - 1];
+    this.history = this.history.slice(0, n - 1);
+    this.restore(prev);
+  }
+
+  clear() {
+    this.record(true);
+    this.name = '';
+    this.savedId = null;
+    this.waypoints = [];
+    this.legModes = [];
+    this.loop = false;
+    this.snapping.clear();
+    this.refresh();
+  }
+
+  /** Removing the start of a loop removes the end first, reopening the loop. */
+  private remove(id: string) {
     let i = this.waypoints.findIndex((w) => w.id === id);
     if (i < 0) return;
     if (this.loop && (i === 0 || i === this.waypoints.length - 1)) i = this.waypoints.length - 1;
@@ -118,21 +170,6 @@ class Planner {
     this.refresh();
   }
 
-  undo() {
-    const last = this.waypoints[this.waypoints.length - 1];
-    if (last) this.removeWaypoint(last.id);
-  }
-
-  clear() {
-    this.name = '';
-    this.savedId = null;
-    this.waypoints = [];
-    this.legModes = [];
-    this.loop = false;
-    this.snapping.clear();
-    this.refresh();
-  }
-
   /**
    * Remove waypoints that don't change the route. Each intermediate waypoint between two
    * routed legs is tried in turn: if routing straight from its neighbour before to its
@@ -142,6 +179,8 @@ class Planner {
   async optimise(): Promise<number> {
     if (this.optimising) return 0;
     this.optimising = true;
+    // The whole optimise is undone in one step.
+    this.record();
     let removed = 0;
     try {
       let i = 1;
@@ -171,7 +210,7 @@ class Planner {
           break;
         }
         if (same) {
-          this.removeWaypoint(wp.id);
+          this.remove(wp.id);
           removed++;
         } else {
           i++;
@@ -184,12 +223,15 @@ class Planner {
   }
 
   toggleLeg(i: number) {
+    this.record();
     this.legModes[i] = this.legModes[i] === 'route' ? 'direct' : 'route';
     this.refresh();
   }
 
   /** Replace the route. Its points are taken as already snapped. */
   load(state: RouteState, savedId: string | null = null) {
+    // Nothing to go back to when the planner starts from a link.
+    if (this.waypoints.length) this.record(true);
     this.snapping.clear();
     this.savedId = savedId;
     this.name = state.name;
@@ -207,6 +249,33 @@ class Planner {
       waypoints: this.waypoints.map(({ lat, lng, label }) => ({ lat, lng, label })),
       legModes: $state.snapshot(this.legModes),
     };
+  }
+
+  private snapshot(): Snapshot {
+    return {
+      waypoints: $state.snapshot(this.waypoints),
+      legModes: $state.snapshot(this.legModes),
+      loop: this.loop,
+      snapping: [...this.snapping],
+    };
+  }
+
+  /** Save the route before an edit, so it can be undone. */
+  private record(doc = false) {
+    const s = this.snapshot();
+    if (doc) s.doc = { name: this.name, savedId: this.savedId };
+    this.history = [...this.history.slice(-(UNDO_LIMIT - 1)), s];
+  }
+
+  private restore(s: Snapshot) {
+    if (s.doc) ({ name: this.name, savedId: this.savedId } = s.doc);
+    this.waypoints = s.waypoints;
+    this.legModes = s.legModes;
+    this.loop = s.loop;
+    this.snapping.clear();
+    this.refresh();
+    // Points that were still snapping when the edit was made snap again.
+    for (const [id, requested] of s.snapping) this.snap(id, requested);
   }
 
   /** Rebuild legs from waypoints, reusing unchanged legs and routing only new ones. */
@@ -250,11 +319,17 @@ class Planner {
     snapToPath(requested, SNAP_RADIUS_M, wanted).then((p) => {
       if (!wanted()) return;
       this.snapping.delete(id);
+      const [lat, lng] = [roundCoord(p.lat), roundCoord(p.lng)];
       const wp = this.waypoints.find((w) => w.id === id);
-      if (wp) {
-        wp.lat = roundCoord(p.lat);
-        wp.lng = roundCoord(p.lng);
-      }
+      if (wp) [wp.lat, wp.lng] = [lat, lng];
+      // Edits made while this point was snapping are undone to the snapped position.
+      this.history = this.history.map((s) => {
+        if (!s.snapping.some(([sid, r]) => sid === id && r === requested)) return s;
+        // The end of a loop follows its start.
+        const end = s.loop && s.waypoints[0].id === id ? s.waypoints.length - 1 : -1;
+        const waypoints = s.waypoints.map((w, i) => (w.id === id || i === end ? { ...w, lat, lng } : w));
+        return { ...s, waypoints, snapping: s.snapping.filter(([sid]) => sid !== id) };
+      });
       this.mirrorStart();
       this.refresh();
     });
