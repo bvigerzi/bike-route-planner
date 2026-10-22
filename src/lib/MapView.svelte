@@ -193,7 +193,7 @@
   let optimisingHere = $state(false);
   const shownNotice = $derived(noticeText || (optimisingHere ? 'Optimising route…' : ''));
 
-  // The planner, where optimise reports its result, is usually folded on mobile, so report it here too.
+  // The planner, where optimise reports its result, may be folded or far from the button, so report it here too.
   async function optimise() {
     optimisingHere = true;
     const removed = await planner.optimise();
@@ -231,7 +231,7 @@
       <circle cx="8" cy="8" r="6.5" fill={theme.dark ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.5" />
     </svg>
   </button>
-  <!-- Mobile only: the planner (and its Undo, Clear and Optimise) is usually folded away there, and stray taps are easier to make. -->
+  <!-- The planner's Undo, Clear and Optimise, kept to hand on the map: the planner is usually folded away on mobile, where stray taps are easier to make. -->
   <button
     class="map-button undo-button"
     aria-label="Undo"
@@ -414,10 +414,14 @@
   .theme-toggle {
     top: 10px;
   }
-  .undo-button,
-  .clear-button,
+  .undo-button {
+    top: 50px;
+  }
+  .clear-button {
+    top: 90px;
+  }
   .optimise-button {
-    display: none;
+    top: 130px;
   }
   /* Clear of the planner's tab, which overlaps the bottom of the map on mobile. */
   @media (max-width: 700px) {
@@ -428,11 +432,6 @@
     .theme-toggle,
     .notice-wrap {
       top: 28px;
-    }
-    .undo-button,
-    .clear-button,
-    .optimise-button {
-      display: flex;
     }
     .undo-button {
       top: 68px;
