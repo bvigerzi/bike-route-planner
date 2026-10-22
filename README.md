@@ -45,6 +45,7 @@ Classification rules are in `src/lib/categories.ts`.
 
 - **Map:** [Leaflet](https://leafletjs.com) with standard OSM raster tiles.
 - **Routing:** the public [BRouter](https://brouter.de) instance, `safety` profile. No API key is needed. Each leg is routed on its own and cached. BRouter returns the OSM tags for every section of a leg, and the app uses them to choose the colour. Time and ascent come from BRouter. Direct legs are estimated at 15 km/h.
+- **Rate limiting:** BRouter documents no rate limit, but brouter.de answers 403 if it gets too many requests. So the app sends BRouter requests one at a time (`src/lib/throttle.ts`). During a burst, such as rapid clicking or Optimise, the gap between requests doubles from 250 ms up to 2 s. Points show on the map straight away, and their legs stay grey and dotted until routed. After a 403 or 429, the app waits 2 s, doubling up to 30 s, and retries up to 3 times.
 - **Search:** [Nominatim](https://nominatim.org). It searches only when you submit, as its usage policy requires.
 
 Settings (router URL, profile, direct-leg speed, snap radius, default map centre) are in `src/lib/config.ts`.

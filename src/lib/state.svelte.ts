@@ -206,9 +206,10 @@ class Planner {
   private snap(id: string, requested: LatLng) {
     this.snapping.set(id, requested);
     this.refresh();
-    snapToPath(requested, SNAP_RADIUS_M).then((p) => {
-      // Ignore if the waypoint was moved or removed since.
-      if (this.snapping.get(id) !== requested) return;
+    // Skip the request, or ignore its result, if the waypoint was moved or removed since.
+    const wanted = () => this.snapping.get(id) === requested;
+    snapToPath(requested, SNAP_RADIUS_M, wanted).then((p) => {
+      if (!wanted()) return;
       this.snapping.delete(id);
       const wp = this.waypoints.find((w) => w.id === id);
       if (wp) {

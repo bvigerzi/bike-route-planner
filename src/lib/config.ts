@@ -18,3 +18,16 @@ export const SNAP_RADIUS_M = 30;
 
 // Warn when the route's link is longer than this; some apps truncate long links when shared.
 export const URL_WARN_LENGTH = 2000;
+
+// BRouter publishes no rate limit, but brouter.de answers 403 when hit too often, so requests go
+// one at a time. In a burst (rapid clicks, optimise) the gap between them doubles from
+// burstBaseMs up to burstMaxMs; the burst ends after quietMs with no requests. quietMs must exceed
+// burstMaxMs. A 403/429 waits rejectBaseMs, doubling up to rejectMaxMs, and is retried maxRetries times.
+export const BROUTER_THROTTLE = {
+  burstBaseMs: 250,
+  burstMaxMs: 2000,
+  quietMs: 3000,
+  rejectBaseMs: 2000,
+  rejectMaxMs: 30000,
+  maxRetries: 3,
+};

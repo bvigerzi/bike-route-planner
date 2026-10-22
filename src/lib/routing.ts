@@ -1,5 +1,6 @@
 import { classify, type Category } from './categories';
-import { BROUTER_PROFILE, BROUTER_URL, DIRECT_SPEED_KMH } from './config';
+import { BROUTER_PROFILE, BROUTER_THROTTLE, BROUTER_URL, DIRECT_SPEED_KMH } from './config';
+import { isRejected, Throttle } from './throttle';
 
 export type LatLng = { lat: number; lng: number };
 export type LegMode = 'route' | 'direct';
@@ -77,6 +78,9 @@ export function parseBRouter(geojson: any): LegResult {
 
 const cache = new Map<string, Promise<LegResult>>();
 
+/** Every BRouter request goes through this, so rapid edits and optimise don't flood the server. */
+const brouter = new Throttle(BROUTER_THROTTLE);
+
 export function routeLeg(a: LatLng, b: LatLng): Promise<LegResult> {
   const key = legKey(a, b, 'route');
   let pending = cache.get(key);
@@ -87,8 +91,11 @@ export function routeLeg(a: LatLng, b: LatLng): Promise<LegResult> {
       alternativeidx: '0',
       format: 'geojson',
     });
-    pending = fetch(`${BROUTER_URL}?${params}`)
+    pending = brouter
+      .fetch(`${BROUTER_URL}?${params}`)
       .then(async (res) => {
+        res = res!;
+        if (isRejected(res.status)) throw new Error(`BRouter is refusing requests (${res.status}); wait a moment and try again`);
         if (!res.ok) throw new Error((await res.text()).trim() || `BRouter error ${res.status}`);
         return parseBRouter(await res.json());
       })
@@ -115,17 +122,17 @@ export function parseSnap(geojson: any, p: LatLng, maxM: number): LatLng {
 /**
  * Snap p onto the nearest rideable way within maxM metres. BRouter matches every waypoint to the
  * nearest way its profile can ride, so a zero-length route from p to p returns that matched point.
- * Never rejects: if the router fails, p is returned unchanged.
+ * Never rejects: if the router fails, or isWanted() is false by the time the request would be sent, p is returned unchanged.
  */
-export async function snapToPath(p: LatLng, maxM: number): Promise<LatLng> {
+export async function snapToPath(p: LatLng, maxM: number, isWanted?: () => boolean): Promise<LatLng> {
   const params = new URLSearchParams({
     lonlats: `${p.lng},${p.lat}|${p.lng},${p.lat}`,
     profile: BROUTER_PROFILE,
     format: 'geojson',
   });
   try {
-    const res = await fetch(`${BROUTER_URL}?${params}`);
-    if (!res.ok) return p;
+    const res = await brouter.fetch(`${BROUTER_URL}?${params}`, isWanted);
+    if (!res?.ok) return p;
     return parseSnap(await res.json(), p, maxM);
   } catch {
     return p;
