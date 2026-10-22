@@ -100,7 +100,7 @@
     <p class="muted hint">
       {planner.waypoints.length === 0
         ? 'Click the map to set the start / meeting point.'
-        : 'Click the map to add waypoints, or right-click to add one reached by a direct line. Drag markers to move them.'}
+        : 'Click the map to add waypoints, or right-click to add one reached by a direct line. Drag markers to move them; click the start to return to it at the end.'}
     </p>
   </section>
 
@@ -110,8 +110,9 @@
       <input class="name" placeholder="Route name" bind:value={planner.name} />
       <ol class="waypoints">
         {#each planner.waypoints as wp, i (wp.id)}
+          {@const isEnd = planner.loop && i === planner.waypoints.length - 1}
           <li>
-            <span class="badge" class:start={i === 0}>{i === 0 ? 'S' : i}</span>
+            <span class="badge" class:start={i === 0 || isEnd}>{i === 0 ? 'S' : isEnd ? 'E' : i}</span>
             <span class="wp-label">{wpLabel(wp)}</span>
             <button class="icon" title="Remove" onclick={() => planner.removeWaypoint(wp.id)}>×</button>
           </li>

@@ -52,11 +52,17 @@
   // Markers
   $effect(() => {
     markerLayer.clearLayers();
+    const loop = planner.loop;
+    const count = planner.waypoints.length;
     planner.waypoints.forEach((wp, i) => {
+      // The end of a loop sits under the start marker, which stands for both.
+      if (loop && i === count - 1) return;
       const isStart = i === 0;
+      // Clicking the start closes the route into a loop, once there is somewhere to loop from.
+      const closesLoop = isStart && !loop && count > 1;
       const icon = L.divIcon({
         className: '',
-        html: `<div class="wp-marker${isStart ? ' start' : ''}">${isStart ? 'S' : i}</div>`,
+        html: `<div class="wp-marker${isStart ? ' start' : ''}${isStart && loop ? ' loop' : ''}">${isStart ? (loop ? 'S/E' : 'S') : i}</div>`,
         iconSize: [26, 26],
         iconAnchor: [13, 13],
         popupAnchor: [0, -13],
@@ -64,11 +70,15 @@
       // Left-click only offers removal, so a press that was meant as a drag can't delete the point.
       const removeBtn = L.DomUtil.create('button', 'wp-remove');
       removeBtn.type = 'button';
-      removeBtn.textContent = 'Remove?';
+      removeBtn.textContent = isStart && loop ? 'Remove end?' : 'Remove?';
       removeBtn.onclick = () => planner.removeWaypoint(wp.id);
+      const name = isStart ? (loop ? 'Start / end point' : 'Start / meeting point') : `Waypoint ${i}`;
       const marker = L.marker([wp.lat, wp.lng], { icon, draggable: true })
-        .bindTooltip(`${isStart ? 'Start / meeting point' : `Waypoint ${i}`} — drag to move, click for options, right-click to remove`)
-        .bindPopup(removeBtn, { closeButton: false, className: 'wp-popup' })
+        .bindTooltip(
+          closesLoop
+            ? `${name} — drag to move, click to return here at the end, right-click to remove`
+            : `${name} — drag to move, click for options, right-click to remove${loop && isStart ? ' the end' : ''}`,
+        )
         .on('popupopen', () => marker.closeTooltip())
         .on('dragstart', () => marker.closePopup())
         .on('dragend', () => {
@@ -79,6 +89,8 @@
           L.DomEvent.preventDefault(e.originalEvent);
           planner.removeWaypoint(wp.id);
         });
+      if (closesLoop) marker.on('click', () => planner.closeLoop());
+      else marker.bindPopup(removeBtn, { closeButton: false, className: 'wp-popup' });
       markerLayer.addLayer(marker);
     });
   });
@@ -207,6 +219,9 @@
   }
   :global(.wp-marker.start) {
     background: #c0392b;
+  }
+  :global(.wp-marker.loop) {
+    font-size: 9px;
   }
   :global(.wp-popup .leaflet-popup-content) {
     margin: 6px;

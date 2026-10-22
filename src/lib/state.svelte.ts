@@ -18,6 +18,8 @@ class Planner {
   savedId = $state<string | null>(null);
   /** Index 0 is the start / meeting point. */
   waypoints = $state<Waypoint[]>([]);
+  /** True when the route returns to the start: the last waypoint then mirrors the first. */
+  loop = $state(false);
   /** legModes[i] is the mode of the leg from waypoints[i] to waypoints[i + 1]. */
   legModes = $state<LegMode[]>([]);
   legs = $state.raw<LegState[]>([]);
@@ -56,9 +58,25 @@ class Planner {
   addWaypoint(lat: number, lng: number, label?: string, mode: LegMode = 'route') {
     [lat, lng] = [roundCoord(lat), roundCoord(lng)];
     const id = crypto.randomUUID();
-    this.waypoints.push({ id, lat, lng, label });
-    if (this.waypoints.length > 1) this.legModes.push(mode);
+    if (this.loop) {
+      // Keep the route closed: the new point goes before the end, keeping the end leg's mode.
+      this.waypoints.splice(this.waypoints.length - 1, 0, { id, lat, lng, label });
+      this.legModes.splice(this.legModes.length - 1, 0, mode);
+    } else {
+      this.waypoints.push({ id, lat, lng, label });
+      if (this.waypoints.length > 1) this.legModes.push(mode);
+    }
     this.snap(id, { lat, lng });
+  }
+
+  /** Return to the start by adding a final waypoint at the start's position. */
+  closeLoop() {
+    if (this.loop || this.waypoints.length < 2) return;
+    const { lat, lng, label } = this.waypoints[0];
+    this.waypoints.push({ id: crypto.randomUUID(), lat, lng, label });
+    this.legModes.push('route');
+    this.loop = true;
+    this.refresh();
   }
 
   setStart(lat: number, lng: number, label?: string) {
@@ -67,6 +85,7 @@ class Planner {
     const id = crypto.randomUUID();
     this.snapping.delete(this.waypoints[0].id);
     this.waypoints[0] = { id, lat, lng, label };
+    this.mirrorStart();
     this.snap(id, { lat, lng });
   }
 
@@ -77,15 +96,25 @@ class Planner {
     wp.lat = lat;
     wp.lng = lng;
     wp.label = undefined;
+    this.mirrorStart();
     this.snap(id, { lat, lng });
   }
 
+  /** Removing the start of a loop removes the end first, reopening the loop. */
   removeWaypoint(id: string) {
-    const i = this.waypoints.findIndex((w) => w.id === id);
+    let i = this.waypoints.findIndex((w) => w.id === id);
     if (i < 0) return;
-    this.snapping.delete(id);
+    if (this.loop && (i === 0 || i === this.waypoints.length - 1)) i = this.waypoints.length - 1;
+    this.snapping.delete(this.waypoints[i].id);
     this.waypoints.splice(i, 1);
     if (this.legModes.length > 0) this.legModes.splice(Math.max(0, i - 1), 1);
+    if (i === this.waypoints.length) this.loop = false;
+    // A loop needs a waypoint besides the start and end.
+    if (this.loop && this.waypoints.length < 3) {
+      this.waypoints.pop();
+      this.legModes.pop();
+      this.loop = false;
+    }
     this.refresh();
   }
 
@@ -99,6 +128,7 @@ class Planner {
     this.savedId = null;
     this.waypoints = [];
     this.legModes = [];
+    this.loop = false;
     this.snapping.clear();
     this.refresh();
   }
@@ -165,6 +195,8 @@ class Planner {
     this.name = state.name;
     this.waypoints = state.waypoints.map(({ lat, lng, label }) => ({ id: crypto.randomUUID(), lat, lng, label }));
     this.legModes = [...state.legModes];
+    const [first, last] = [this.waypoints[0], this.waypoints[this.waypoints.length - 1]];
+    this.loop = this.waypoints.length > 2 && first.lat === last.lat && first.lng === last.lng;
     this.refresh();
     if (state.waypoints.length) this.focus = state.waypoints.map((w) => [w.lat, w.lng]);
   }
@@ -181,13 +213,16 @@ class Planner {
   private refresh() {
     const existing = new Map(this.legs.map((l) => [l.key, l]));
     const next: LegState[] = [];
+    // The end of a loop follows the start, so it waits on the start's snap too.
+    const endId = this.loop ? this.waypoints[this.waypoints.length - 1].id : undefined;
+    const waiting = (id: string) => this.snapping.has(id) || (id === endId && this.snapping.has(this.waypoints[0].id));
     for (let i = 0; i < this.waypoints.length - 1; i++) {
       const a = $state.snapshot(this.waypoints[i]);
       const b = $state.snapshot(this.waypoints[i + 1]);
       const mode = this.legModes[i];
       const key = legKey(a, b, mode);
       const prev = existing.get(key);
-      if (this.snapping.has(a.id) || this.snapping.has(b.id)) {
+      if (waiting(a.id) || waiting(b.id)) {
         // Wait for the snapped position rather than routing from where the point was placed.
         // The key is distinct so the leg is routed once the snap lands, even if the point didn't move.
         next.push({ key: `snapping:${key}`, status: 'loading' });
@@ -220,8 +255,18 @@ class Planner {
         wp.lat = roundCoord(p.lat);
         wp.lng = roundCoord(p.lng);
       }
+      this.mirrorStart();
       this.refresh();
     });
+  }
+
+  /** Keep the end of a loop on the start. */
+  private mirrorStart() {
+    if (!this.loop) return;
+    const [start, end] = [this.waypoints[0], this.waypoints[this.waypoints.length - 1]];
+    end.lat = start.lat;
+    end.lng = start.lng;
+    end.label = start.label;
   }
 
   private updateLeg(key: string, state: LegState) {
