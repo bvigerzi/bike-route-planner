@@ -26,6 +26,10 @@ describe('toGpx', () => {
     ]);
   });
 
+  it('prefers a waypoint name over its label', () => {
+    expect(toGpx('', [{ ...a, name: 'Bakery' }, b], [routed])).toContain('<name>Bakery</name>');
+  });
+
   it('joins every leg into one track without repeating shared points', () => {
     expect([...gpx.matchAll(/<trkpt lat="([^"]+)" lon="([^"]+)"\/>/g)].map((m) => [Number(m[1]), Number(m[2])])).toEqual([
       [-37.8, 144.9],

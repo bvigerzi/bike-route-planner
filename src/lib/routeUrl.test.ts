@@ -18,6 +18,22 @@ describe('encodeRoute / decodeRoute', () => {
     expect(decodeRoute(`#${encodeRoute(route)}`)).toEqual(route);
   });
 
+  it('round-trips waypoint names, with or without leg modes', () => {
+    const named: RouteState = {
+      ...route,
+      waypoints: [{ ...route.waypoints[0], name: 'The usual café ☕' }, route.waypoints[1], { ...route.waypoints[2], name: 'Top of "the wall"' }],
+    };
+    expect(decodeRoute(encodeRoute(named))).toEqual(named);
+    const routed = { ...named, legModes: ['route', 'route'] as LegMode[] };
+    expect(decodeRoute(encodeRoute(routed))).toEqual(routed);
+  });
+
+  it('leaves links without names unchanged', () => {
+    const unnamed = encodeRoute(route);
+    expect(encodeRoute({ ...route, waypoints: route.waypoints.map((w) => ({ ...w, name: undefined })) })).toBe(unnamed);
+    expect(decodeRoute(unnamed)?.waypoints.some((w) => 'name' in w)).toBe(false);
+  });
+
   it('omits leg modes when every leg is routed', () => {
     const all = encodeRoute({ ...route, legModes: ['route', 'route'] });
     const mixed = encodeRoute(route);
@@ -72,6 +88,8 @@ describe('encodeRoute / decodeRoute', () => {
     expect(decodeRoute(`${hash}AA`)).toBeNull();
     expect(decodeRoute(`B${hash.slice(1)}`)).toBeNull(); // Wrong version.
     expect(decodeRoute('A')).toBeNull();
+    const named = encodeRoute({ ...route, waypoints: route.waypoints.map((w) => ({ ...w, name: 'x' })) });
+    expect(decodeRoute(named.slice(0, -2))).toBeNull(); // Truncated names.
     // Version 2, name of length 1 with an invalid UTF-8 byte.
     expect(decodeRoute('AgH_AA')).toBeNull();
   });

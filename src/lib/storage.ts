@@ -5,7 +5,10 @@ export interface Waypoint {
   id: string;
   lat: number;
   lng: number;
+  /** From a place search; cleared when the waypoint moves. */
   label?: string;
+  /** Given by the user; shown instead of the label or coordinates. Kept when the waypoint is nudged (see NAME_ALLOWED_RADIUS_M). */
+  name?: string;
 }
 
 export interface SavedRoute {

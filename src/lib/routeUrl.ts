@@ -2,7 +2,8 @@ import type { LatLng, LegMode } from './routing';
 
 export interface RouteState {
   name: string;
-  waypoints: (LatLng & { label?: string })[];
+  /** label is the place a search found; name is one the user gave it, shown in its place. */
+  waypoints: (LatLng & { label?: string; name?: string })[];
   legModes: LegMode[];
 }
 
@@ -16,6 +17,8 @@ export interface RouteState {
  *   per waypoint       zigzag varint lat, zigzag varint lng (units of 1e-5°, each a delta from the
  *                      previous waypoint, the first from 0), then the label as for the name (0 = none)
  *   leg modes          only if the direct flag is set: one bit per leg, LSB first, 1 = direct
+ *   names              optional, only if any waypoint has one: per waypoint, its name as for the
+ *                      route name (0 = none). Links without names end before this.
  *
  * Varints are LEB128: 7 bits per byte, low bits first, high bit set on all but the last byte.
  * Nearby waypoints differ by a few km, so each costs ~5 bytes (~7 chars) plus its label: 100
@@ -129,6 +132,7 @@ export function encodeRoute(s: RouteState): string {
     });
     for (const b of bits) w.bytes.push(b);
   }
+  if (s.waypoints.some((p) => p.name)) for (const p of s.waypoints) w.string(p.name ?? '');
   return toBase64Url(w.bytes);
 }
 
@@ -158,6 +162,12 @@ export function decodeRoute(hash: string): RouteState | null {
     if (count % 2) {
       const bits = Array.from({ length: Math.ceil(legs / 8) }, () => r.byte());
       for (let i = 0; i < legs; i++) if (bits[i >> 3] & (1 << (i & 7))) legModes[i] = 'direct';
+    }
+    if (!r.done) {
+      for (const wp of waypoints) {
+        const name = r.string();
+        if (name) wp.name = name;
+      }
     }
     return r.done ? { name, waypoints, legModes } : null;
   } catch {

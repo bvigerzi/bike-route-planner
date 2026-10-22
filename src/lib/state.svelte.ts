@@ -1,8 +1,8 @@
 import { CATEGORY_ORDER, type Category } from './categories';
 import type { Viewbox } from './geocode';
-import { OPTIMISE_TOLERANCE_M, SNAP_RADIUS_M, UNDO_LIMIT } from './config';
+import { NAME_ALLOWED_RADIUS_M, OPTIMISE_TOLERANCE_M, SNAP_RADIUS_M, UNDO_LIMIT } from './config';
 import { roundCoord, type RouteState } from './routeUrl';
-import { directLeg, legKey, pathLength, routeLeg, samePath, snapToPath, type LatLng, type LegMode, type LegResult } from './routing';
+import { directLeg, haversine, legKey, pathLength, routeLeg, samePath, snapToPath, type LatLng, type LegMode, type LegResult } from './routing';
 import type { Waypoint } from './storage';
 
 export interface LegState {
@@ -92,8 +92,8 @@ class Planner {
   closeLoop() {
     if (this.locked() || this.loop || this.waypoints.length < 2) return;
     this.record();
-    const { lat, lng, label } = this.waypoints[0];
-    this.waypoints.push({ id: crypto.randomUUID(), lat, lng, label });
+    const { lat, lng, label, name } = this.waypoints[0];
+    this.waypoints.push({ id: crypto.randomUUID(), lat, lng, label, name });
     this.legModes.push('route');
     this.loop = true;
     this.refresh();
@@ -118,12 +118,27 @@ class Planner {
     if (!wp) return false;
     this.record();
     [lat, lng] = [roundCoord(lat), roundCoord(lng)];
+    if (haversine([wp.lat, wp.lng], [lat, lng]) > NAME_ALLOWED_RADIUS_M) wp.name = undefined;
     wp.lat = lat;
     wp.lng = lng;
     wp.label = undefined;
     this.mirrorStart();
     this.snap(id, { lat, lng });
     return true;
+  }
+
+  /** Give a waypoint a name of the user's own; an empty name removes it, showing the label or coordinates again. */
+  renameWaypoint(id: string, name: string) {
+    if (this.locked()) return;
+    let wp = this.waypoints.find((w) => w.id === id);
+    if (!wp) return;
+    const next = name.trim() || undefined;
+    if (next === wp.name) return;
+    this.record();
+    // The end of a loop mirrors the start, so naming either names both.
+    if (this.loop && wp === this.waypoints[this.waypoints.length - 1]) wp = this.waypoints[0];
+    wp.name = next;
+    this.mirrorStart();
   }
 
   removeWaypoint(id: string) {
@@ -246,7 +261,7 @@ class Planner {
     this.snapping.clear();
     this.savedId = savedId;
     this.name = state.name;
-    this.waypoints = state.waypoints.map(({ lat, lng, label }) => ({ id: crypto.randomUUID(), lat, lng, label }));
+    this.waypoints = state.waypoints.map(({ lat, lng, label, name }) => ({ id: crypto.randomUUID(), lat, lng, label, name }));
     this.legModes = [...state.legModes];
     const [first, last] = [this.waypoints[0], this.waypoints[this.waypoints.length - 1]];
     this.loop = this.waypoints.length > 2 && first.lat === last.lat && first.lng === last.lng;
@@ -257,7 +272,7 @@ class Planner {
   toState(): RouteState {
     return {
       name: this.name,
-      waypoints: this.waypoints.map(({ lat, lng, label }) => ({ lat, lng, label })),
+      waypoints: this.waypoints.map(({ lat, lng, label, name }) => ({ lat, lng, label, name })),
       legModes: $state.snapshot(this.legModes),
     };
   }
@@ -360,6 +375,7 @@ class Planner {
     end.lat = start.lat;
     end.lng = start.lng;
     end.label = start.label;
+    end.name = start.name;
   }
 
   private updateLeg(key: string, state: LegState) {

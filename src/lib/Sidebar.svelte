@@ -36,7 +36,31 @@
     const mins = Math.round(s / 60);
     return `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, '0')}m`;
   };
-  const wpLabel = (wp: Waypoint) => wp.label ?? `${wp.lat.toFixed(5)}, ${wp.lng.toFixed(5)}`;
+  const wpPlace = (wp: Waypoint) => wp.label ?? `${wp.lat.toFixed(5)}, ${wp.lng.toFixed(5)}`;
+  const wpLabel = (wp: Waypoint) => wp.name ?? wpPlace(wp);
+
+  /** The waypoint whose name is being edited, and the text so far. */
+  let editingId = $state<string | null>(null);
+  let editingName = $state('');
+
+  function startRename(wp: Waypoint) {
+    editingId = wp.id;
+    editingName = wp.name ?? '';
+  }
+
+  function finishRename(name: string | null) {
+    if (editingId === null) return;
+    if (name !== null) planner.renameWaypoint(editingId, name);
+    editingId = null;
+  }
+
+  function renameKey(e: KeyboardEvent) {
+    if (e.key === 'Enter') finishRename(editingName);
+    else if (e.key === 'Escape') finishRename(null);
+  }
+
+  // Focuses the name field once it replaces the label.
+  const focus = (el: HTMLInputElement) => el.focus();
 
   function save(e: SubmitEvent) {
     e.preventDefault();
@@ -149,7 +173,46 @@
                   {@const isEnd = i > 0 && i === planner.waypoints.length - 1}
                   <li>
                     <span class="badge" class:start={i === 0 || isEnd}>{i === 0 ? 'S' : isEnd ? 'E' : i}</span>
-                    <span class="wp-label">{wpLabel(wp)}</span>
+                    {#if editingId === wp.id}
+                      <input
+                        class="wp-name"
+                        placeholder={wpPlace(wp)}
+                        title="Enter to save, Escape to cancel. Leave empty to show the coordinates."
+                        aria-label="Waypoint name"
+                        bind:value={editingName}
+                        onkeydown={renameKey}
+                        onblur={() => finishRename(editingName)}
+                        use:focus
+                      />
+                      {#if wp.name}
+                        <!-- Keeps focus in the field, so its blur doesn't save the text first. -->
+                        <button
+                          class="icon"
+                          title="Remove name, showing the coordinates again"
+                          onmousedown={(e) => e.preventDefault()}
+                          onclick={() => {
+                            planner.renameWaypoint(wp.id, '');
+                            editingId = null;
+                          }}
+                        >
+                          ↺
+                        </button>
+                      {/if}
+                    {:else}
+                      <span class="wp-label" title={wp.name ? wpPlace(wp) : undefined}>{wpLabel(wp)}</span>
+                      <button class="icon" title="Name this waypoint" aria-label="Name this waypoint" onclick={() => startRename(wp)}>
+                        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                          <path
+                            d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                        </svg>
+                      </button>
+                    {/if}
                     <button class="icon" title="Remove" onclick={() => planner.removeWaypoint(wp.id)}>×</button>
                   </li>
                   {#if i < planner.waypoints.length - 1}
@@ -474,6 +537,15 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .wp-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    padding: 1px 4px;
+  }
+  .icon svg {
+    display: block;
   }
   .badge {
     flex: none;

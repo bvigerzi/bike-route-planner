@@ -4,10 +4,10 @@ const escapeXml = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!);
 
 /** The routed track as GPX 1.1: the waypoints as <wpt>, and every leg joined into one track segment. */
-export function toGpx(name: string, waypoints: (LatLng & { label?: string })[], legs: LegResult[]): string {
+export function toGpx(name: string, waypoints: (LatLng & { label?: string; name?: string })[], legs: LegResult[]): string {
   const title = escapeXml(name || 'Route');
   const wpts = waypoints.map(
-    (w, i) => `  <wpt lat="${w.lat}" lon="${w.lng}"><name>${escapeXml(w.label ?? (i === 0 ? 'Start' : `Stop ${i}`))}</name></wpt>`,
+    (w, i) => `  <wpt lat="${w.lat}" lon="${w.lng}"><name>${escapeXml(w.name ?? w.label ?? (i === 0 ? 'Start' : `Stop ${i}`))}</name></wpt>`,
   );
   // Each segment (and leg) starts where the previous one ended; drop the repeated point.
   const points: [number, number][] = [];
