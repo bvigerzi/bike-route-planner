@@ -17,6 +17,14 @@
   let legendOpen = $state(!matchMedia(MOBILE_QUERY).matches);
   // The rows' natural width; folding animates the legend between it and the toggle's width.
   let legendRowsWidth = $state(0);
+  let fitButton: HTMLAnchorElement | undefined = $state();
+
+  // Everything drawn on the map: waypoints plus the routed line of each leg.
+  function contentPoints(): [number, number][] {
+    const pts: [number, number][] = planner.waypoints.map((w) => [w.lat, w.lng]);
+    for (const leg of planner.legs) for (const seg of leg.result?.segments ?? []) pts.push(...seg.coords);
+    return pts;
+  }
 
   onMount(() => {
     const m = L.map(container).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
@@ -49,6 +57,20 @@
     m.on('contextmenu', (e: L.LeafletMouseEvent) => {
       L.DomEvent.preventDefault(e.originalEvent);
       planner.addWaypoint(e.latlng.lat, e.latlng.lng, undefined, 'direct');
+    });
+    // Zoom to fit sits in the zoom control's bar, under zoom in and out.
+    fitButton = L.DomUtil.create('a', 'zoom-fit', m.zoomControl.getContainer());
+    fitButton.href = '#';
+    fitButton.role = 'button';
+    fitButton.title = 'Zoom to fit route';
+    fitButton.setAttribute('aria-label', 'Zoom to fit route');
+    fitButton.innerHTML =
+      '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.75"/></svg>';
+    L.DomEvent.disableClickPropagation(fitButton);
+    L.DomEvent.on(fitButton, 'click', (e) => {
+      L.DomEvent.preventDefault(e);
+      const pts = contentPoints();
+      if (pts.length) planner.focus = pts;
     });
     updateView();
     map = m;
@@ -162,6 +184,13 @@
     return () => clearTimeout(t);
   });
 
+  // Nothing to fit until there is a waypoint.
+  $effect(() => {
+    const empty = !planner.waypoints.length;
+    fitButton?.classList.toggle('leaflet-disabled', empty);
+    fitButton?.setAttribute('aria-disabled', String(empty));
+  });
+
   // Zoom to requested points
   $effect(() => {
     const pts = planner.focus;
@@ -235,6 +264,17 @@
   .map :global(.leaflet-bar a),
   .map :global(.leaflet-tooltip) {
     border-color: var(--border);
+  }
+  /* Restates Leaflet's disabled look, which the theme colours above would otherwise hide. */
+  .map :global(.leaflet-bar a.leaflet-disabled) {
+    background: var(--button-bg);
+    color: var(--border);
+    cursor: default;
+  }
+  .map :global(.zoom-fit) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .map :global(.leaflet-control-attribution) {
     background: var(--overlay-bg);
