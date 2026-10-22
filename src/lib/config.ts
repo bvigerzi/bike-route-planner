@@ -4,6 +4,15 @@ export const BROUTER_PROFILE = 'safety';
 
 export const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 
+// Turn-by-turn directions: Valhalla matches each routed leg's track to OSM and names its streets.
+// FOSSGIS hosts it for fair use only, so directions are fetched on request, one leg at a time, this far apart.
+export const VALHALLA_URL = 'https://valhalla1.openstreetmap.de/trace_route';
+export const VALHALLA_GAP_MS = 1000;
+// Unnamed steps shorter than this (crossings, kerb ramps, short connectors) are folded into the step before.
+export const DIRECTIONS_MIN_STEP_M = 40;
+// A stretch on another way shorter than this that returns to the way before it is left out of the directions.
+export const DIRECTIONS_MAX_DETOUR_M = 400;
+
 // BRouter gives no time for direct (user override) legs, so estimate them at this speed.
 export const DIRECT_SPEED_KMH = 15;
 

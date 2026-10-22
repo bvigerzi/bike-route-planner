@@ -1,0 +1,156 @@
+{
+ "trip": {
+  "legs": [
+   {
+    "shape": "vzmcgAcffnsGfIpb@vIjb@\\hBf@xBxGiC~GgCjAcA\\aADq@Ne@Xc@b@Wd@Gd@H`@VXd@Nl@Bn@Il@dAx@jCtAtHxD`HEfBs@`@Ob@SdbAw]HK~@gAxAkBrIiQnDsKtBoHf[ci@yGqLqIsP_G_LwM}VyGgM__@yr@_FiJhGeCI_AQoAWsAm@qAu@uA]s@g@}@e@w@w@uAyAcCu@wA{EaLwIoS[q@Wm@{CkH{BuFm@wA[y@yNk^qBwEaGoNiBkE}Sgg@wT{h@wPqa@kJsU?iCAuKmCqGwDoJaBaBKSO_BYgCMmASiBW{BpAy@Wi@uKqS{BcLuBeMvLmN|JaKzC}CxHaJ`@kA`@hEb@|@~BmFpC_DrFiGhNwNxFmFxBcC`IwJf@cA|BiD|DyIrCmGfAeCtAiDn@_B~AoEnC}JpBaJz@eFN{@p@}DjE_i@`@qEh@cGp@aH~Deb@zAuPNwAv@mKBc@`@cGj@{DfDwYs@O_@Ew@KqX{E",
+    "maneuvers": [
+     {
+      "type": 1,
+      "instruction": "Walk west on the walkway.",
+      "length": 0.053,
+      "begin_shape_index": 0,
+      "end_shape_index": 1
+     },
+     {
+      "type": 24,
+      "instruction": "Keep left to take the walkway.",
+      "length": 0.064,
+      "begin_shape_index": 1,
+      "end_shape_index": 4
+     },
+     {
+      "type": 15,
+      "instruction": "Turn left onto Siddeley Street.",
+      "street_names": [
+       "Siddeley Street"
+      ],
+      "length": 0.043,
+      "begin_shape_index": 4,
+      "end_shape_index": 8
+     },
+     {
+      "type": 16,
+      "instruction": "Bear left.",
+      "length": 0.006,
+      "begin_shape_index": 8,
+      "end_shape_index": 11
+     },
+     {
+      "type": 10,
+      "instruction": "Turn right.",
+      "length": 0.009,
+      "begin_shape_index": 11,
+      "end_shape_index": 15
+     },
+     {
+      "type": 10,
+      "instruction": "Turn right.",
+      "length": 0.009,
+      "begin_shape_index": 15,
+      "end_shape_index": 19
+     },
+     {
+      "type": 16,
+      "instruction": "Bear left.",
+      "length": 0.344,
+      "begin_shape_index": 19,
+      "end_shape_index": 34
+     },
+     {
+      "type": 15,
+      "instruction": "Turn left.",
+      "length": 0.26,
+      "begin_shape_index": 34,
+      "end_shape_index": 41
+     },
+     {
+      "type": 10,
+      "instruction": "Turn right.",
+      "length": 0.016,
+      "begin_shape_index": 41,
+      "end_shape_index": 42
+     },
+     {
+      "type": 15,
+      "instruction": "Turn left.",
+      "length": 0.035,
+      "begin_shape_index": 42,
+      "end_shape_index": 51
+     },
+     {
+      "type": 8,
+      "instruction": "Continue on Yarra Promenade.",
+      "street_names": [
+       "Yarra Promenade"
+      ],
+      "length": 0.54,
+      "begin_shape_index": 51,
+      "end_shape_index": 81
+     },
+     {
+      "type": 15,
+      "instruction": "Turn left onto Southbank Promenade.",
+      "street_names": [
+       "Southbank Promenade"
+      ],
+      "length": 0.079,
+      "begin_shape_index": 81,
+      "end_shape_index": 85
+     },
+     {
+      "type": 10,
+      "instruction": "Turn right.",
+      "length": 0.071,
+      "begin_shape_index": 85,
+      "end_shape_index": 88
+     },
+     {
+      "type": 8,
+      "instruction": "Continue on the walkway.",
+      "length": 0.027,
+      "begin_shape_index": 88,
+      "end_shape_index": 90
+     },
+     {
+      "type": 10,
+      "instruction": "Turn right onto the crosswalk.",
+      "length": 0.012,
+      "begin_shape_index": 90,
+      "end_shape_index": 92
+     },
+     {
+      "type": 15,
+      "instruction": "Turn left onto Southbank Boulevard.",
+      "street_names": [
+       "Southbank Boulevard"
+      ],
+      "length": 0.516,
+      "begin_shape_index": 92,
+      "end_shape_index": 124
+     },
+     {
+      "type": 15,
+      "instruction": "Turn left.",
+      "length": 0.008,
+      "begin_shape_index": 124,
+      "end_shape_index": 127
+     },
+     {
+      "type": 8,
+      "instruction": "Continue on the walkway.",
+      "length": 0.046,
+      "begin_shape_index": 127,
+      "end_shape_index": 128
+     },
+     {
+      "type": 4,
+      "instruction": "You have arrived at your destination.",
+      "length": 0,
+      "begin_shape_index": 128,
+      "end_shape_index": 128
+     }
+    ]
+   }
+  ]
+ }
+}

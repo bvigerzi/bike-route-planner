@@ -2,6 +2,7 @@
   import { fade } from 'svelte/transition';
   import { CATEGORIES, CATEGORY_ORDER } from './categories';
   import { DIRECT_SPEED_KMH, URL_WARN_LENGTH } from './config';
+  import { describeRoute } from './directions';
   import { downloadGpx, toGpx } from './gpx';
   import { MAPS_APP_NAME, MAX_STOPS, mapsUrl, preferredMapsApp } from './mapsLink';
   import { decodeRoute, encodeRoute } from './routeUrl';
@@ -18,6 +19,9 @@
   let copied = $state(false);
   let justSaved = $state(false);
   let justSavedTimer: ReturnType<typeof setTimeout> | undefined;
+  // Directions belong to the legs they were written for; editing the route hides them.
+  let directions = $state.raw<{ legsKey: string; lines?: string[]; error?: string } | null>(null);
+  let describing = $state(false);
 
   const hash = $derived(encodeRoute(planner.toState()));
   // A route that has never been saved, or differs from its saved entry, has unsaved changes.
@@ -31,6 +35,7 @@
     const mins = Math.round(s / 60);
     return `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, '0')}m`;
   };
+  const legsKey = $derived(planner.legs.map((l) => l.key).join('|'));
   const wpLabel = (wp: Waypoint) => wp.label ?? `${wp.lat.toFixed(5)}, ${wp.lng.toFixed(5)}`;
 
   function save(e: SubmitEvent) {
@@ -86,6 +91,22 @@
   function exportGpx() {
     const legs = planner.legs.flatMap((l) => (l.result ? [l.result] : []));
     downloadGpx(planner.name || 'route', toGpx(planner.name, planner.waypoints, legs));
+  }
+
+  async function describe() {
+    const key = legsKey;
+    const legs = planner.legs.map((l, i) => ({ key: l.key, mode: planner.legModes[i], result: l.result! }));
+    // Search results are long addresses; the place name comes first.
+    const place = (wp?: Waypoint) => wp?.label?.split(',')[0].trim() || undefined;
+    describing = true;
+    try {
+      const lines = await describeRoute(legs, { start: place(planner.waypoints[0]), end: place(planner.waypoints.at(-1)), loop: planner.loop });
+      directions = { legsKey: key, lines };
+    } catch (err) {
+      directions = { legsKey: key, error: (err as Error).message };
+    } finally {
+      describing = false;
+    }
   }
 
   async function optimise() {
@@ -244,6 +265,21 @@
                     {MAPS_APP_NAME[mapsApp]} allows up to {MAX_STOPS[mapsApp]} stops (this route has {planner.waypoints.length - 2}).
                     Try Optimise, or Download GPX for a bike app.
                   </p>
+                {/if}
+                <div class="row nav">
+                  <button type="button" title="Write out the route turn by turn, with street and trail names" disabled={describing} onclick={describe}>
+                    {describing ? 'Describing…' : 'Describe route'}
+                  </button>
+                </div>
+                {#if directions?.legsKey === legsKey}
+                  {#if directions.lines}
+                    <ul class="directions">
+                      {#each directions.lines as line}<li>{line}</li>{/each}
+                    </ul>
+                    <p class="muted hint">Street names from OpenStreetMap via <a href="https://valhalla.github.io/valhalla/" target="_blank" rel="noopener">Valhalla</a> (FOSSGIS).</p>
+                  {:else}
+                    <p class="error">{directions.error}</p>
+                  {/if}
                 {/if}
               {/if}
             </section>
@@ -528,6 +564,15 @@
     width: 12px;
     height: 12px;
     border-radius: 2px;
+  }
+  .directions {
+    font-size: 13px;
+    line-height: 1.4;
+    margin: 8px 0 0;
+    padding-left: 18px;
+  }
+  .directions li + li {
+    margin-top: 4px;
   }
   .error {
     color: var(--danger-text);
