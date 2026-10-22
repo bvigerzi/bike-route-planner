@@ -114,3 +114,42 @@ export function directLeg(a: LatLng, b: LatLng): LegResult {
     ascentM: 0,
   };
 }
+
+/** Distance in metres from point p to segment ab, using a local flat projection. */
+function pointToSegment(p: [number, number], a: [number, number], b: [number, number]): number {
+  const kx = Math.cos(p[0] * (Math.PI / 180)) * 111320;
+  const ky = 110540;
+  const ax = (a[1] - p[1]) * kx;
+  const ay = (a[0] - p[0]) * ky;
+  const dx = (b[1] - a[1]) * kx;
+  const dy = (b[0] - a[0]) * ky;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2));
+  return Math.hypot(ax + t * dx, ay + t * dy);
+}
+
+function within(points: [number, number][], line: [number, number][], toleranceM: number): boolean {
+  if (line.length === 1) return points.every((p) => haversine(p, line[0]) <= toleranceM);
+  return points.every((p) => {
+    for (let i = 1; i < line.length; i++) if (pointToSegment(p, line[i - 1], line[i]) <= toleranceM) return true;
+    return false;
+  });
+}
+
+export function legCoords(legs: LegResult[]): [number, number][] {
+  return legs.flatMap((l) => l.segments.flatMap((s) => s.coords));
+}
+
+/**
+ * Whether two routes follow the same path: every point of each lies within
+ * toleranceM of the other, and their lengths roughly agree.
+ */
+export function samePath(a: LegResult[], b: LegResult[], toleranceM: number): boolean {
+  const distA = a.reduce((sum, l) => sum + l.distanceM, 0);
+  const distB = b.reduce((sum, l) => sum + l.distanceM, 0);
+  if (Math.abs(distA - distB) > Math.max(2 * toleranceM, 0.01 * Math.max(distA, distB))) return false;
+  const ca = legCoords(a);
+  const cb = legCoords(b);
+  if (ca.length === 0 || cb.length === 0) return ca.length === cb.length;
+  return within(ca, cb, toleranceM) && within(cb, ca, toleranceM);
+}

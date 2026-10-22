@@ -9,3 +9,6 @@ export const DIRECT_SPEED_KMH = 15;
 
 export const DEFAULT_CENTER: [number, number] = [-37.8136, 144.9631]; // Melbourne
 export const DEFAULT_ZOOM = 13;
+
+// "Optimise route" drops a waypoint if the route without it stays within this many metres of the original.
+export const OPTIMISE_TOLERANCE_M = 10;

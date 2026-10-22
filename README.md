@@ -16,6 +16,7 @@ yarn build      # static output in dist/
 - **Click the map** to set the start / meeting point (red **S**), then click again to add waypoints. You can also **search** for a place and choose *Set start* or *Add*.
 - **Drag** a marker to move it, and **click** a marker (or ×) to remove it.
 - Each leg has a **Route / Direct** toggle. *Direct* ignores the router and draws a straight line. Use it where you know something the map doesn't, e.g. a footpath that's fine to ride.
+- **Optimise** removes waypoints you don't need. It tries each waypoint between two routed legs in turn. If routing past that point gives the same path (within 10 m), the waypoint is removed. If not, it is kept.
 - The summary shows distance, estimated time, ascent and the distance in each path type. Finished routes can be **saved** to browser localStorage and loaded again later.
 
 ### Path colours

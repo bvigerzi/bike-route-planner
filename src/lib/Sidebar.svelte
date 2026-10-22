@@ -8,6 +8,7 @@
   let saved = $state.raw<SavedRoute[]>(loadRoutes());
   let routeName = $state('');
   let saveError = $state('');
+  let optimiseResult = $state('');
 
   const km = (m: number) => `${(m / 1000).toFixed(1)} km`;
   const duration = (s: number) => {
@@ -33,6 +34,12 @@
     if (!confirm(`Delete "${route.name}"?`)) return;
     const next = saved.filter((r) => r.id !== route.id);
     if (saveRoutes(next)) saved = next;
+  }
+
+  async function optimise() {
+    optimiseResult = '';
+    const removed = await planner.optimise();
+    optimiseResult = removed ? `Removed ${removed} unneeded waypoint${removed === 1 ? '' : 's'}.` : 'No waypoints could be removed.';
   }
 
   const routeDistance = (r: SavedRoute) => r.legs.reduce((sum, l) => sum + l.distanceM, 0);
@@ -83,9 +90,17 @@
         {/each}
       </ol>
       <div class="row">
-        <button onclick={() => planner.undo()}>Undo last</button>
-        <button onclick={() => planner.clear()}>Clear</button>
+        <button disabled={planner.optimising} onclick={() => planner.undo()}>Undo last</button>
+        <button disabled={planner.optimising} onclick={() => planner.clear()}>Clear</button>
+        <button
+          disabled={planner.optimising || planner.waypoints.length < 3}
+          title="Remove waypoints that don't change the route"
+          onclick={optimise}
+        >
+          {planner.optimising ? 'Optimising…' : 'Optimise'}
+        </button>
       </div>
+      {#if optimiseResult}<p class="muted hint">{optimiseResult}</p>{/if}
     </section>
   {/if}
 

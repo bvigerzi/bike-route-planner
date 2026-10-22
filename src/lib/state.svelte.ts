@@ -1,6 +1,7 @@
 import { CATEGORY_ORDER, type Category } from './categories';
 import type { Viewbox } from './geocode';
-import { directLeg, legKey, pathLength, routeLeg, type LegMode, type LegResult } from './routing';
+import { OPTIMISE_TOLERANCE_M } from './config';
+import { directLeg, legKey, pathLength, routeLeg, samePath, type LegMode, type LegResult } from './routing';
 import type { SavedRoute, Waypoint } from './storage';
 
 export interface LegState {
@@ -20,6 +21,8 @@ class Planner {
   view = $state.raw<Viewbox | undefined>(undefined);
   /** Points the map should zoom to; set to request a fit. */
   focus = $state.raw<[number, number][] | null>(null);
+  /** True while optimise() is running. */
+  optimising = $state(false);
 
   totals = $derived.by(() => {
     const byCategory = Object.fromEntries(CATEGORY_ORDER.map((c) => [c, 0])) as Record<Category, number>;
@@ -81,6 +84,49 @@ class Planner {
     this.waypoints = [];
     this.legModes = [];
     this.refresh();
+  }
+
+  /**
+   * Remove waypoints that don't change the route. Each intermediate waypoint between two
+   * routed legs is tried in turn: if routing straight from its neighbour before to its
+   * neighbour after follows the same path, it is dropped; otherwise it is kept.
+   * Returns the number of waypoints removed.
+   */
+  async optimise(): Promise<number> {
+    if (this.optimising) return 0;
+    this.optimising = true;
+    let removed = 0;
+    try {
+      let i = 1;
+      while (i < this.waypoints.length - 1) {
+        const [prev, wp, next] = [i - 1, i, i + 1].map((j) => $state.snapshot(this.waypoints[j]));
+        if (this.legModes[i - 1] !== 'route' || this.legModes[i] !== 'route') {
+          i++;
+          continue;
+        }
+        let same = false;
+        try {
+          const [withWp, withoutWp] = await Promise.all([
+            Promise.all([routeLeg(prev, wp), routeLeg(wp, next)]),
+            routeLeg(prev, next),
+          ]);
+          same = samePath(withWp, [withoutWp], OPTIMISE_TOLERANCE_M);
+        } catch {
+          // Routing failed: keep the waypoint.
+        }
+        // Stop if the route was edited while we were waiting on the router.
+        if ([prev, wp, next].some((w, k) => this.waypoints[i - 1 + k]?.id !== w.id)) break;
+        if (same) {
+          this.removeWaypoint(wp.id);
+          removed++;
+        } else {
+          i++;
+        }
+      }
+    } finally {
+      this.optimising = false;
+    }
+    return removed;
   }
 
   toggleLeg(i: number) {

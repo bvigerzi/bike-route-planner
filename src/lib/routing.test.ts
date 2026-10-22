@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { directLeg, parseBRouter, pathLength } from './routing';
+import { directLeg, parseBRouter, pathLength, samePath, type LegResult } from './routing';
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/brouter-sample.json', import.meta.url), 'utf8'));
 
@@ -40,5 +40,37 @@ describe('directLeg', () => {
     expect(leg.segments[0].category).toBe('override');
     expect(leg.distanceM).toBeCloseTo(1112, 0);
     expect(leg.timeS).toBeCloseTo(leg.distanceM / (15 / 3.6), 5);
+  });
+});
+
+describe('samePath', () => {
+  const leg = (coords: [number, number][]): LegResult => ({
+    segments: [{ category: 'road', coords }],
+    distanceM: pathLength(coords),
+    timeS: 0,
+    ascentM: 0,
+  });
+  const A: [number, number] = [-37.8, 144.9];
+  const B: [number, number] = [-37.805, 144.9];
+  const C: [number, number] = [-37.81, 144.9];
+
+  it('treats a route split at a point on its path as the same', () => {
+    expect(samePath([leg([A, B]), leg([B, C])], [leg([A, C])], 10)).toBe(true);
+  });
+
+  it('detects a detour', () => {
+    const off: [number, number] = [-37.805, 144.905];
+    expect(samePath([leg([A, off]), leg([off, C])], [leg([A, C])], 10)).toBe(false);
+  });
+
+  it('detects a parallel path beyond the tolerance', () => {
+    const shift = (p: [number, number]): [number, number] => [p[0], p[1] + 0.0005]; // ~44 m east
+    const parallel = leg([A, shift(A), shift(B), shift(C), C]);
+    expect(samePath([parallel], [leg([A, C])], 10)).toBe(false);
+  });
+
+  it('works on a real BRouter leg', () => {
+    const real = parseBRouter(fixture);
+    expect(samePath([real], [real], 10)).toBe(true);
   });
 });
