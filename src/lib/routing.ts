@@ -101,6 +101,37 @@ export function routeLeg(a: LatLng, b: LatLng): Promise<LegResult> {
   return pending;
 }
 
+/**
+ * The point p snaps to: the nearest point on a way the router can use, if it is within maxM metres.
+ * Otherwise (too far, or no usable response) p itself.
+ */
+export function parseSnap(geojson: any, p: LatLng, maxM: number): LatLng {
+  const first = geojson?.features?.[0]?.geometry?.coordinates?.[0];
+  if (!Array.isArray(first) || !Number.isFinite(first[0]) || !Number.isFinite(first[1])) return p;
+  const [lng, lat] = first;
+  return haversine([p.lat, p.lng], [lat, lng]) <= maxM ? { lat, lng } : p;
+}
+
+/**
+ * Snap p onto the nearest rideable way within maxM metres. BRouter matches every waypoint to the
+ * nearest way its profile can ride, so a zero-length route from p to p returns that matched point.
+ * Never rejects: if the router fails, p is returned unchanged.
+ */
+export async function snapToPath(p: LatLng, maxM: number): Promise<LatLng> {
+  const params = new URLSearchParams({
+    lonlats: `${p.lng},${p.lat}|${p.lng},${p.lat}`,
+    profile: BROUTER_PROFILE,
+    format: 'geojson',
+  });
+  try {
+    const res = await fetch(`${BROUTER_URL}?${params}`);
+    if (!res.ok) return p;
+    return parseSnap(await res.json(), p, maxM);
+  } catch {
+    return p;
+  }
+}
+
 export function directLeg(a: LatLng, b: LatLng): LegResult {
   const coords: [number, number][] = [
     [a.lat, a.lng],

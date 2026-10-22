@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { directLeg, parseBRouter, pathLength, samePath, type LegResult } from './routing';
+import { directLeg, parseBRouter, parseSnap, pathLength, samePath, type LegResult } from './routing';
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/brouter-sample.json', import.meta.url), 'utf8'));
 
@@ -72,5 +72,27 @@ describe('samePath', () => {
   it('works on a real BRouter leg', () => {
     const real = parseBRouter(fixture);
     expect(samePath([real], [real], 10)).toBe(true);
+  });
+});
+
+describe('parseSnap', () => {
+  const p = { lat: -37.821, lng: 144.975 };
+  // Real BRouter response shape for a zero-length route from p to p.
+  const response = (lng: number, lat: number) => ({
+    type: 'FeatureCollection',
+    features: [{ type: 'Feature', properties: { 'track-length': '0' }, geometry: { type: 'LineString', coordinates: [[lng, lat, 8.5]] } }],
+  });
+
+  it('moves to the matched point when it is within range', () => {
+    expect(parseSnap(response(144.974743, -37.821135), p, 30)).toEqual({ lat: -37.821135, lng: 144.974743 });
+  });
+
+  it('keeps the placed point when the nearest way is too far', () => {
+    expect(parseSnap(response(144.8649, -37.925481), p, 30)).toBe(p);
+  });
+
+  it('keeps the placed point on an unexpected response', () => {
+    expect(parseSnap({}, p, 30)).toBe(p);
+    expect(parseSnap({ features: [{ geometry: { coordinates: [] } }] }, p, 30)).toBe(p);
   });
 });

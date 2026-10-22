@@ -1,7 +1,7 @@
 import { CATEGORY_ORDER, type Category } from './categories';
 import type { Viewbox } from './geocode';
-import { OPTIMISE_TOLERANCE_M } from './config';
-import { directLeg, legKey, pathLength, routeLeg, samePath, type LegMode, type LegResult } from './routing';
+import { OPTIMISE_TOLERANCE_M, SNAP_RADIUS_M } from './config';
+import { directLeg, legKey, pathLength, routeLeg, samePath, snapToPath, type LatLng, type LegMode, type LegResult } from './routing';
 import type { SavedRoute, Waypoint } from './storage';
 
 export interface LegState {
@@ -23,6 +23,8 @@ class Planner {
   focus = $state.raw<[number, number][] | null>(null);
   /** True while optimise() is running. */
   optimising = $state(false);
+  /** Waypoints waiting to snap onto a path, by id, with the position the snap was requested for. */
+  private snapping = new Map<string, LatLng>();
 
   totals = $derived.by(() => {
     const byCategory = Object.fromEntries(CATEGORY_ORDER.map((c) => [c, 0])) as Record<Category, number>;
@@ -47,15 +49,18 @@ class Planner {
   });
 
   addWaypoint(lat: number, lng: number, label?: string) {
-    this.waypoints.push({ id: crypto.randomUUID(), lat, lng, label });
+    const id = crypto.randomUUID();
+    this.waypoints.push({ id, lat, lng, label });
     if (this.waypoints.length > 1) this.legModes.push('route');
-    this.refresh();
+    this.snap(id, { lat, lng });
   }
 
   setStart(lat: number, lng: number, label?: string) {
     if (this.waypoints.length === 0) return this.addWaypoint(lat, lng, label);
-    this.waypoints[0] = { id: crypto.randomUUID(), lat, lng, label };
-    this.refresh();
+    const id = crypto.randomUUID();
+    this.snapping.delete(this.waypoints[0].id);
+    this.waypoints[0] = { id, lat, lng, label };
+    this.snap(id, { lat, lng });
   }
 
   moveWaypoint(id: string, lat: number, lng: number) {
@@ -64,12 +69,13 @@ class Planner {
     wp.lat = lat;
     wp.lng = lng;
     wp.label = undefined;
-    this.refresh();
+    this.snap(id, { lat, lng });
   }
 
   removeWaypoint(id: string) {
     const i = this.waypoints.findIndex((w) => w.id === id);
     if (i < 0) return;
+    this.snapping.delete(id);
     this.waypoints.splice(i, 1);
     if (this.legModes.length > 0) this.legModes.splice(Math.max(0, i - 1), 1);
     this.refresh();
@@ -83,6 +89,7 @@ class Planner {
   clear() {
     this.waypoints = [];
     this.legModes = [];
+    this.snapping.clear();
     this.refresh();
   }
 
@@ -114,8 +121,15 @@ class Planner {
         } catch {
           // Routing failed: keep the waypoint.
         }
-        // Stop if the route was edited while we were waiting on the router.
-        if ([prev, wp, next].some((w, k) => this.waypoints[i - 1 + k]?.id !== w.id)) break;
+        // Stop if the route was edited (or a waypoint snapped) while we were waiting on the router.
+        if (
+          [prev, wp, next].some((w, k) => {
+            const now = this.waypoints[i - 1 + k];
+            return now?.id !== w.id || now.lat !== w.lat || now.lng !== w.lng;
+          })
+        ) {
+          break;
+        }
         if (same) {
           this.removeWaypoint(wp.id);
           removed++;
@@ -135,6 +149,7 @@ class Planner {
   }
 
   load(route: SavedRoute) {
+    this.snapping.clear();
     this.waypoints = $state.snapshot(route.waypoints);
     this.legModes = [...route.legModes];
     this.legs = route.legs.map((result, i) => ({
@@ -166,7 +181,11 @@ class Planner {
       const mode = this.legModes[i];
       const key = legKey(a, b, mode);
       const prev = existing.get(key);
-      if (prev && prev.status !== 'error') {
+      if (this.snapping.has(a.id) || this.snapping.has(b.id)) {
+        // Wait for the snapped position rather than routing from where the point was placed.
+        // The key is distinct so the leg is routed once the snap lands, even if the point didn't move.
+        next.push({ key: `snapping:${key}`, status: 'loading' });
+      } else if (prev && prev.status !== 'error') {
         next.push(prev);
       } else if (mode === 'direct') {
         next.push({ key, status: 'ok', result: directLeg(a, b) });
@@ -179,6 +198,23 @@ class Planner {
       }
     }
     this.legs = next;
+  }
+
+  /** Move a waypoint onto the nearest rideable way, if one is close, then reroute. */
+  private snap(id: string, requested: LatLng) {
+    this.snapping.set(id, requested);
+    this.refresh();
+    snapToPath(requested, SNAP_RADIUS_M).then((p) => {
+      // Ignore if the waypoint was moved or removed since.
+      if (this.snapping.get(id) !== requested) return;
+      this.snapping.delete(id);
+      const wp = this.waypoints.find((w) => w.id === id);
+      if (wp) {
+        wp.lat = p.lat;
+        wp.lng = p.lng;
+      }
+      this.refresh();
+    });
   }
 
   private updateLeg(key: string, state: LegState) {

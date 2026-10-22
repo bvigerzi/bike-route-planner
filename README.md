@@ -14,6 +14,7 @@ yarn build      # static output in dist/
 ```
 
 - **Click the map** to set the start / meeting point (red **S**), then click again to add waypoints. You can also **search** for a place and choose *Set start* or *Add*.
+- Points you place **snap** onto the nearest rideable way (road, bike path, shared path, etc.) if one is within 30 m. Further away, they stay exactly where you put them. "Rideable" means any way the BRouter profile can route on.
 - **Drag** a marker to move it, and **click** a marker (or ×) to remove it.
 - Each leg has a **Route / Direct** toggle. *Direct* ignores the router and draws a straight line. Use it where you know something the map doesn't, e.g. a footpath that's fine to ride.
 - **Optimise** removes waypoints you don't need. It tries each waypoint between two routed legs in turn. If routing past that point gives the same path (within 10 m), the waypoint is removed. If not, it is kept.
@@ -38,7 +39,7 @@ Classification rules are in `src/lib/categories.ts`.
 - **Routing:** the public [BRouter](https://brouter.de) instance, `safety` profile. No API key is needed. Each leg is routed on its own and cached. BRouter returns the OSM tags for every section of a leg, and the app uses them to choose the colour. Time and ascent come from BRouter. Direct legs are estimated at 15 km/h.
 - **Search:** [Nominatim](https://nominatim.org). It searches only when you submit, as its usage policy requires.
 
-Settings (router URL, profile, direct-leg speed, default map centre) are in `src/lib/config.ts`.
+Settings (router URL, profile, direct-leg speed, snap radius, default map centre) are in `src/lib/config.ts`.
 
 ## Future considerations
 
@@ -46,5 +47,7 @@ Settings (router URL, profile, direct-leg speed, default map centre) are in `src
 - Areas you draw where the router should prefer riding (local knowledge, beyond straight-line overrides).
 - A global "allow footpaths" toggle, using a custom BRouter profile.
 - Self-hosting BRouter if the public instance becomes a limitation.
+- Self-hosting Overpass (Australia extract) for waypoint snapping. Snapping currently uses BRouter, which finds the nearest way its profile can ride but doesn't say what kind of way it is, so it can't prefer a bike path over a closer road. Overpass returns each way's tags, which would allow that. Public Overpass instances were too slow and unreliable for snapping on every click: in testing, most queries took 20–40 s or timed out after 60 s. None is hosted near Australia. Send a descriptive `User-Agent` header, or the public instances reject requests with 406.
 - Search-as-you-type using Photon.
+- A modifier key (e.g. Alt+click) to place a point exactly, without snapping.
 - GPX export.

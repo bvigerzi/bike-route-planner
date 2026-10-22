@@ -12,3 +12,6 @@ export const DEFAULT_ZOOM = 13;
 
 // "Optimise route" drops a waypoint if the route without it stays within this many metres of the original.
 export const OPTIMISE_TOLERANCE_M = 10;
+
+// New waypoints move onto the nearest rideable way if it is within this many metres; otherwise they stay where placed.
+export const SNAP_RADIUS_M = 30;
