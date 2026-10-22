@@ -34,6 +34,10 @@ export const IMAGE_LINE_SCALE = 1.5;
 
 export const DEFAULT_CENTER: [number, number] = [-37.8136, 144.9631]; // Melbourne
 export const DEFAULT_ZOOM = 13;
+// Scroll pixels per zoom level. Leaflet rounds any wheel zoom up to a whole level, and at its default of 60 a
+// single mouse-wheel notch (~120px in Chrome on Linux) jumps two levels; at this value a notch of up to ~230px
+// zooms one level, matching the + and - buttons, while scrolling faster still zooms further.
+export const WHEEL_PX_PER_ZOOM_LEVEL = 150;
 
 // "Optimise route" drops a waypoint if the route without it stays within this many metres of the original.
 export const OPTIMISE_TOLERANCE_M = 10;

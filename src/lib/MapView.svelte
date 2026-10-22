@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
   import { fade } from 'svelte/transition';
   import { CATEGORIES, CATEGORY_ORDER } from './categories';
-  import { DEFAULT_CENTER, DEFAULT_ZOOM, MOBILE_QUERY, NOTICE_MS, TILE_URL } from './config';
+  import { DEFAULT_CENTER, DEFAULT_ZOOM, MOBILE_QUERY, NOTICE_MS, TILE_URL, WHEEL_PX_PER_ZOOM_LEVEL } from './config';
   import { planner } from './state.svelte';
   import { theme, toggleDark } from './theme.svelte';
 
@@ -27,7 +27,7 @@
   }
 
   onMount(() => {
-    const m = L.map(container).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+    const m = L.map(container, { wheelPxPerZoomLevel: WHEEL_PX_PER_ZOOM_LEVEL }).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
     L.tileLayer(TILE_URL, {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · Routing <a href="https://brouter.de">BRouter</a>',
