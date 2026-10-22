@@ -109,7 +109,7 @@
   async function optimise() {
     optimiseResult = '';
     const removed = await planner.optimise();
-    optimiseResult = removed ? `Removed ${removed} unneeded waypoint${removed === 1 ? '' : 's'}.` : 'No waypoints could be removed.';
+    optimiseResult = removed ? `Removed ${removed} unneeded waypoint${removed === 1 ? '' : 's'}.` : 'No waypoints were removed - route already optimised.';
   }
 </script>
 
