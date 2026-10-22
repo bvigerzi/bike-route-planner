@@ -51,7 +51,7 @@
   function onKeyDown(e: KeyboardEvent) {
     if (!isUndoShortcut(e) || inTextField(e.target)) return;
     e.preventDefault();
-    if (!planner.optimising) planner.undo();
+    planner.undo();
   }
 </script>
 

@@ -76,3 +76,31 @@ describe('undo', () => {
     expect(coords()).toEqual([[1, 1]]);
   });
 });
+
+describe('while optimising', () => {
+  beforeEach(() => {
+    planner.clear();
+    while (planner.canUndo) planner.undo();
+  });
+
+  it('refuses edits and shows a notice', async () => {
+    planner.addWaypoint(1, 1);
+    planner.addWaypoint(2, 2);
+    planner.addWaypoint(3, 3);
+    planner.notice = null;
+    const done = planner.optimise();
+    const [first] = planner.waypoints;
+    planner.addWaypoint(4, 4);
+    expect(planner.moveWaypoint(first.id, 5, 5)).toBe(false);
+    planner.removeWaypoint(first.id);
+    planner.toggleLeg(0);
+    planner.clear();
+    expect(planner.notice).not.toBeNull();
+    await done;
+    expect(coords()).toEqual([
+      [1, 1],
+      [3, 3],
+    ]);
+    expect(planner.legModes).toEqual(['route']);
+  });
+});

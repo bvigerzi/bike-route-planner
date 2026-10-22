@@ -40,6 +40,8 @@ class Planner {
   focus = $state.raw<[number, number][] | null>(null);
   /** True while optimise() is running. */
   optimising = $state(false);
+  /** A short message to flash to the user; a new object each time, so repeats show again. */
+  notice = $state.raw<{ text: string } | null>(null);
   /** Waypoints waiting to snap onto a path, by id, with the position the snap was requested for. */
   private snapping = new Map<string, LatLng>();
   /** Earlier states of the route, most recent last. */
@@ -71,6 +73,7 @@ class Planner {
 
   /** Append a waypoint, reached by a leg of the given mode. */
   addWaypoint(lat: number, lng: number, label?: string, mode: LegMode = 'route') {
+    if (this.locked()) return;
     this.record();
     [lat, lng] = [roundCoord(lat), roundCoord(lng)];
     const id = crypto.randomUUID();
@@ -87,7 +90,7 @@ class Planner {
 
   /** Return to the start by adding a final waypoint at the start's position. */
   closeLoop() {
-    if (this.loop || this.waypoints.length < 2) return;
+    if (this.locked() || this.loop || this.waypoints.length < 2) return;
     this.record();
     const { lat, lng, label } = this.waypoints[0];
     this.waypoints.push({ id: crypto.randomUUID(), lat, lng, label });
@@ -97,6 +100,7 @@ class Planner {
   }
 
   setStart(lat: number, lng: number, label?: string) {
+    if (this.locked()) return;
     if (this.waypoints.length === 0) return this.addWaypoint(lat, lng, label);
     this.record();
     [lat, lng] = [roundCoord(lat), roundCoord(lng)];
@@ -107,9 +111,11 @@ class Planner {
     this.snap(id, { lat, lng });
   }
 
-  moveWaypoint(id: string, lat: number, lng: number) {
+  /** Returns false if the move was refused. */
+  moveWaypoint(id: string, lat: number, lng: number): boolean {
+    if (this.locked()) return false;
     const wp = this.waypoints.find((w) => w.id === id);
-    if (!wp) return;
+    if (!wp) return false;
     this.record();
     [lat, lng] = [roundCoord(lat), roundCoord(lng)];
     wp.lat = lat;
@@ -117,16 +123,18 @@ class Planner {
     wp.label = undefined;
     this.mirrorStart();
     this.snap(id, { lat, lng });
+    return true;
   }
 
   removeWaypoint(id: string) {
-    if (!this.waypoints.some((w) => w.id === id)) return;
+    if (this.locked() || !this.waypoints.some((w) => w.id === id)) return;
     this.record();
     this.remove(id);
   }
 
   /** Revert the last edit. */
   undo() {
+    if (this.locked()) return;
     // Skip states the route is already in, e.g. from an optimise that removed nothing.
     const current = JSON.stringify(this.snapshot());
     const same = (s: Snapshot) => !s.doc && JSON.stringify(s) === current;
@@ -142,6 +150,7 @@ class Planner {
   }
 
   clear() {
+    if (this.locked()) return;
     this.record(true);
     this.name = '';
     this.savedId = null;
@@ -223,6 +232,7 @@ class Planner {
   }
 
   toggleLeg(i: number) {
+    if (this.locked()) return;
     this.record();
     this.legModes[i] = this.legModes[i] === 'route' ? 'direct' : 'route';
     this.refresh();
@@ -230,6 +240,7 @@ class Planner {
 
   /** Replace the route. Its points are taken as already snapped. */
   load(state: RouteState, savedId: string | null = null) {
+    if (this.locked()) return;
     // Nothing to go back to when the planner starts from a link.
     if (this.waypoints.length) this.record(true);
     this.snapping.clear();
@@ -249,6 +260,13 @@ class Planner {
       waypoints: this.waypoints.map(({ lat, lng, label }) => ({ lat, lng, label })),
       legModes: $state.snapshot(this.legModes),
     };
+  }
+
+  /** Optimise reroutes the route as it stands, so edits are refused (with a notice) until it finishes. */
+  private locked() {
+    if (!this.optimising) return false;
+    this.notice = { text: 'Hang tight — your route is being optimised. You can make changes again once it’s done.' };
+    return true;
   }
 
   private snapshot(): Snapshot {

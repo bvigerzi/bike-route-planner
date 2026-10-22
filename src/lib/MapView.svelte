@@ -2,8 +2,9 @@
   import L from 'leaflet';
   import 'leaflet/dist/leaflet.css';
   import { onMount } from 'svelte';
+  import { fade } from 'svelte/transition';
   import { CATEGORIES, CATEGORY_ORDER } from './categories';
-  import { DEFAULT_CENTER, DEFAULT_ZOOM, MOBILE_QUERY, TILE_URL } from './config';
+  import { DEFAULT_CENTER, DEFAULT_ZOOM, MOBILE_QUERY, NOTICE_MS, TILE_URL } from './config';
   import { planner } from './state.svelte';
   import { theme, toggleDark } from './theme.svelte';
 
@@ -101,7 +102,8 @@
         .on('dragstart', () => marker.closePopup())
         .on('dragend', () => {
           const ll = marker.getLatLng();
-          planner.moveWaypoint(wp.id, ll.lat, ll.lng);
+          // Put the marker back if the move was refused.
+          if (!planner.moveWaypoint(wp.id, ll.lat, ll.lng)) marker.setLatLng([wp.lat, wp.lng]);
         })
         .on('contextmenu', (e: L.LeafletMouseEvent) => {
           L.DomEvent.preventDefault(e.originalEvent);
@@ -150,6 +152,16 @@
     });
   });
 
+  // Each new notice shows for NOTICE_MS, restarting the timer if one is already showing.
+  let noticeText = $state('');
+  $effect(() => {
+    const n = planner.notice;
+    if (!n) return;
+    noticeText = n.text;
+    const t = setTimeout(() => (noticeText = ''), NOTICE_MS);
+    return () => clearTimeout(t);
+  });
+
   // Zoom to requested points
   $effect(() => {
     const pts = planner.focus;
@@ -161,6 +173,9 @@
 
 <div class="map-wrap">
   <div class="map" bind:this={container}></div>
+  <div class="notice-wrap" role="status">
+    {#if noticeText}<div class="notice" transition:fade={{ duration: 200 }}>{noticeText}</div>{/if}
+  </div>
   <button class="theme-toggle" aria-label="Dark mode" aria-pressed={theme.dark} title="Dark mode" onclick={toggleDark}>
     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
       <circle cx="8" cy="8" r="6.5" fill={theme.dark ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.5" />
@@ -239,6 +254,24 @@
     font-size: 12px;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   }
+  .notice-wrap {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    width: max-content;
+    max-width: calc(100% - 120px);
+    pointer-events: none;
+  }
+  .notice {
+    background: var(--overlay-bg);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    text-align: center;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  }
   .theme-toggle {
     position: absolute;
     top: 10px;
@@ -265,7 +298,8 @@
       bottom: 36px;
     }
     /* Below the attribution, which moves to the top right on mobile. */
-    .theme-toggle {
+    .theme-toggle,
+    .notice-wrap {
       top: 28px;
     }
   }

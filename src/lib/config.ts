@@ -6,6 +6,8 @@ export const BROUTER_PROFILE = 'safety';
 export const PHOTON_URL = 'https://photon.komoot.io/api/';
 // Search runs once typing pauses for this long, and only when the query has at least this many characters.
 export const SEARCH_DEBOUNCE_MS = 350;
+// Notices over the map (e.g. an edit refused while optimising) disappear after this long.
+export const NOTICE_MS = 4000;
 export const SEARCH_MIN_CHARS = 3;
 
 // BRouter gives no time for direct (user override) legs, so estimate them at this speed.
