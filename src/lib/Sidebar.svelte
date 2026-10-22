@@ -2,8 +2,10 @@
   import { fade } from 'svelte/transition';
   import { CATEGORIES, CATEGORY_ORDER } from './categories';
   import { DIRECT_SPEED_KMH, URL_WARN_LENGTH } from './config';
-  import { downloadGpx, toGpx } from './gpx';
+  import { downloadFile } from './download';
+  import { toGpx } from './gpx';
   import { MAPS_APP_NAME, MAX_STOPS, mapsUrl, preferredMapsApp } from './mapsLink';
+  import { renderRouteImage } from './routeImage';
   import { decodeRoute, encodeRoute } from './routeUrl';
   import SearchBox from './SearchBox.svelte';
   import { planner } from './state.svelte';
@@ -16,6 +18,8 @@
   let saveError = $state('');
   let optimiseResult = $state('');
   let copied = $state(false);
+  let exportingImage = $state(false);
+  let imageError = $state('');
   let justSaved = $state(false);
   let justSavedTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -85,7 +89,20 @@
 
   function exportGpx() {
     const legs = planner.legs.flatMap((l) => (l.result ? [l.result] : []));
-    downloadGpx(planner.name || 'route', toGpx(planner.name, planner.waypoints, legs));
+    downloadFile(planner.name || 'route', 'gpx', new Blob([toGpx(planner.name, planner.waypoints, legs)], { type: 'application/gpx+xml' }));
+  }
+
+  async function exportImage() {
+    exportingImage = true;
+    imageError = '';
+    try {
+      const legs = planner.legs.flatMap((l) => (l.result ? [l.result] : []));
+      downloadFile(planner.name || 'route', 'jpg', await renderRouteImage(planner.waypoints, legs, planner.loop));
+    } catch {
+      imageError = 'Could not create the image. Try again shortly.';
+    } finally {
+      exportingImage = false;
+    }
   }
 
   async function optimise() {
@@ -216,11 +233,20 @@
                   {:else}
                     <button type="submit" title="Keep a link to this route in this browser">Save</button>
                   {/if}
+                  <button
+                    type="button"
+                    title="Download a JPEG of the route, zoomed to fit it, with the start and end marked"
+                    disabled={exportingImage}
+                    onclick={exportImage}
+                  >
+                    {exportingImage ? 'Exporting…' : 'Export image'}
+                  </button>
                   <button type="button" title="Copy a link to this route to share" onclick={copyLink}>
                     {copied ? 'Copied' : 'Copy link'}
                   </button>
                 </form>
                 {#if saveError}<p class="error">{saveError}</p>{/if}
+                {#if imageError}<p class="error">{imageError}</p>{/if}
                 <div class="row nav">
                   {#if mapsHref}
                     <a
@@ -477,6 +503,7 @@
   }
   .row {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
   }
   .row.nav {

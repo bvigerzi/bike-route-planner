@@ -3,7 +3,7 @@
   import 'leaflet/dist/leaflet.css';
   import { onMount } from 'svelte';
   import { CATEGORIES, CATEGORY_ORDER } from './categories';
-  import { DEFAULT_CENTER, DEFAULT_ZOOM, MOBILE_QUERY } from './config';
+  import { DEFAULT_CENTER, DEFAULT_ZOOM, MOBILE_QUERY, TILE_URL } from './config';
   import { planner } from './state.svelte';
   import { theme, toggleDark } from './theme.svelte';
 
@@ -19,7 +19,7 @@
 
   onMount(() => {
     const m = L.map(container).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer(TILE_URL, {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · Routing <a href="https://brouter.de">BRouter</a>',
     }).addTo(m);

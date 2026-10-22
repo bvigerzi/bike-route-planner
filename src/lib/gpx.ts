@@ -34,13 +34,3 @@ export function toGpx(name: string, waypoints: (LatLng & { label?: string })[], 
     '',
   ].join('\n');
 }
-
-export function downloadGpx(name: string, gpx: string) {
-  const url = URL.createObjectURL(new Blob([gpx], { type: 'application/gpx+xml' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${name.replace(/[\\/:*?"<>|]+/g, '_').trim() || 'route'}.gpx`;
-  a.click();
-  // Some browsers start the download asynchronously, so keep the URL alive briefly.
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}

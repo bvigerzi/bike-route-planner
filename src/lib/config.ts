@@ -7,6 +7,16 @@ export const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 // BRouter gives no time for direct (user override) legs, so estimate them at this speed.
 export const DIRECT_SPEED_KMH = 15;
 
+export const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+export const TILE_SIZE = 256;
+
+// "Export image" picks the closest zoom at which the route, plus padding, fits within this many pixels each way.
+// It is kept modest because every tile in the image is fetched from the OSM tile servers.
+export const IMAGE_MAX_PX = 1600;
+export const IMAGE_PADDING_PX = 40;
+// The image is widened (or heightened) so neither side is more than this many times the other.
+export const IMAGE_MAX_ASPECT = 2;
+
 export const DEFAULT_CENTER: [number, number] = [-37.8136, 144.9631]; // Melbourne
 export const DEFAULT_ZOOM = 13;
 
