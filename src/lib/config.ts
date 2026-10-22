@@ -42,3 +42,7 @@ export const LEG_CACHE_MAX_CHARS = 1_000_000;
 
 // Google Maps directions links take at most this many stops between origin and destination.
 export const MAX_GOOGLE_STOPS = 9;
+
+// Below this width the planner stacks under the map, and it and the legend start folded to leave the map room.
+// Keep in step with the max-width media queries in App.svelte and Sidebar.svelte.
+export const MOBILE_QUERY = '(max-width: 700px)';

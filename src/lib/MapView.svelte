@@ -3,7 +3,7 @@
   import 'leaflet/dist/leaflet.css';
   import { onMount } from 'svelte';
   import { CATEGORIES, CATEGORY_ORDER } from './categories';
-  import { DEFAULT_CENTER, DEFAULT_ZOOM } from './config';
+  import { DEFAULT_CENTER, DEFAULT_ZOOM, MOBILE_QUERY } from './config';
   import { planner } from './state.svelte';
 
   // All Leaflet usage lives in this component so the map library can be swapped later.
@@ -11,6 +11,8 @@
   let map: L.Map | undefined = $state();
   const markerLayer = L.layerGroup();
   const routeLayer = L.layerGroup();
+  // Folded by default on mobile, where the open legend covers much of the map.
+  let legendOpen = $state(!matchMedia(MOBILE_QUERY).matches);
 
   onMount(() => {
     const m = L.map(container).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
@@ -46,7 +48,13 @@
     });
     updateView();
     map = m;
-    return () => m.remove();
+    // Leaflet only tracks window resizes; folding the planner on mobile resizes the map on its own.
+    const resize = new ResizeObserver(() => m.invalidateSize());
+    resize.observe(container);
+    return () => {
+      resize.disconnect();
+      m.remove();
+    };
   });
 
   // Markers
@@ -144,16 +152,23 @@
 <div class="map-wrap">
   <div class="map" bind:this={container}></div>
   <div class="legend">
-    {#each CATEGORY_ORDER as cat}
-      <div class="legend-row">
-        <span
-          class="swatch"
-          style:background={CATEGORIES[cat].dashed ? 'none' : CATEGORIES[cat].color}
-          style:border-top={CATEGORIES[cat].dashed ? `3px dashed ${CATEGORIES[cat].color}` : 'none'}
-        ></span>
-        {CATEGORIES[cat].label}
+    <button class="legend-toggle" aria-expanded={legendOpen} aria-controls="legend-rows" onclick={() => (legendOpen = !legendOpen)}>
+      Legend {legendOpen ? '▾' : '▴'}
+    </button>
+    {#if legendOpen}
+      <div id="legend-rows">
+        {#each CATEGORY_ORDER as cat}
+          <div class="legend-row">
+            <span
+              class="swatch"
+              style:background={CATEGORIES[cat].dashed ? 'none' : CATEGORIES[cat].color}
+              style:border-top={CATEGORIES[cat].dashed ? `3px dashed ${CATEGORIES[cat].color}` : 'none'}
+            ></span>
+            {CATEGORIES[cat].label}
+          </div>
+        {/each}
       </div>
-    {/each}
+    {/if}
   </div>
 </div>
 
@@ -176,6 +191,19 @@
     border-radius: 6px;
     font-size: 12px;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  }
+  .legend-toggle {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: none;
+    font-size: 12px;
+    font-weight: bold;
+    text-align: left;
+  }
+  .legend-toggle:hover {
+    background: none;
   }
   .legend-row {
     display: flex;

@@ -9,6 +9,9 @@
   import { planner } from './state.svelte';
   import { loadRoutes, saveRoutes, type SavedRoute, type Waypoint } from './storage';
 
+  // Only takes effect on mobile; on desktop the planner always shows.
+  let { open = $bindable(true) }: { open?: boolean } = $props();
+
   let saved = $state.raw<SavedRoute[]>(loadRoutes());
   let saveError = $state('');
   let optimiseResult = $state('');
@@ -93,161 +96,175 @@
 </script>
 
 <aside>
+  <button
+    class="fold"
+    class:open
+    aria-label={open ? 'Hide planner' : 'Show planner'}
+    aria-expanded={open}
+    aria-controls="planner-body"
+    onclick={() => (open = !open)}
+  >
+    <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+      <path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  </button>
   <h1>Bike Route Planner</h1>
 
-  <section>
-    <SearchBox />
-    <p class="muted hint">
-      {planner.waypoints.length === 0
-        ? 'Click the map to set the start / meeting point.'
-        : 'Click the map to add waypoints, or right-click to add one reached by a direct line. Drag markers to move them; click the start to return to it at the end.'}
-    </p>
-  </section>
-
-  {#if planner.waypoints.length}
+  <div id="planner-body" class:folded={!open}>
     <section>
-      <h2>Route</h2>
-      <input class="name" placeholder="Route name" bind:value={planner.name} />
-      <ol class="waypoints">
-        {#each planner.waypoints as wp, i (wp.id)}
-          {@const isEnd = planner.loop && i === planner.waypoints.length - 1}
-          <li>
-            <span class="badge" class:start={i === 0 || isEnd}>{i === 0 ? 'S' : isEnd ? 'E' : i}</span>
-            <span class="wp-label">{wpLabel(wp)}</span>
-            <button class="icon" title="Remove" onclick={() => planner.removeWaypoint(wp.id)}>×</button>
-          </li>
-          {#if i < planner.waypoints.length - 1}
-            {@const leg = planner.legs[i]}
-            <li class="leg">
-              <button
-                class="toggle"
-                class:direct={planner.legModes[i] === 'direct'}
-                title="Direct ignores the router and draws a straight line (local knowledge override)"
-                onclick={() => planner.toggleLeg(i)}
-              >
-                {planner.legModes[i] === 'direct' ? 'Direct' : 'Route'}
-              </button>
-              {#if leg?.status === 'loading'}
-                <span class="muted">routing…</span>
-              {:else if leg?.status === 'error'}
-                <span class="error" title={leg.error}>routing failed — try Direct or move a point</span>
-              {:else if leg?.result}
-                <span class="muted">{km(leg.result.distanceM)}</span>
-              {/if}
-            </li>
-          {/if}
-        {/each}
-      </ol>
-      <div class="row">
-        <button disabled={planner.optimising} onclick={() => planner.undo()}>Undo last</button>
-        <button disabled={planner.optimising} onclick={() => planner.clear()}>Clear</button>
-        <button
-          disabled={planner.optimising || planner.waypoints.length < 3}
-          title="Remove waypoints that don't change the route"
-          onclick={optimise}
-        >
-          {planner.optimising ? 'Optimising…' : 'Optimise'}
-        </button>
-      </div>
-      {#if optimiseResult}<p class="muted hint">{optimiseResult}</p>{/if}
-      {#if linkLength > URL_WARN_LENGTH}
-        <p class="error">Link is {linkLength} characters — some apps may truncate it. Try Optimise to remove waypoints.</p>
-      {/if}
+      <SearchBox />
+      <p class="muted hint">
+        {planner.waypoints.length === 0
+          ? 'Click the map to set the start / meeting point.'
+          : 'Click the map to add waypoints, or right-click to add one reached by a direct line. Drag markers to move them; click the start to return to it at the end.'}
+      </p>
     </section>
-  {/if}
 
-  {#if planner.legs.length}
-    <section>
-      <h2>Summary</h2>
-      {#if planner.totals.loading}<p class="muted">Routing…</p>{/if}
-      <div class="stats">
-        <div><strong>{km(planner.totals.distanceM)}</strong><span>distance</span></div>
-        <div><strong>{duration(planner.totals.timeS)}</strong><span>est. time</span></div>
-        <div><strong>{Math.round(planner.totals.ascentM)} m</strong><span>ascent</span></div>
-      </div>
-      <ul class="breakdown">
-        {#each CATEGORY_ORDER as cat}
-          {#if planner.totals.byCategory[cat] > 0}
+    {#if planner.waypoints.length}
+      <section>
+        <h2>Route</h2>
+        <input class="name" placeholder="Route name" bind:value={planner.name} />
+        <ol class="waypoints">
+          {#each planner.waypoints as wp, i (wp.id)}
+            {@const isEnd = planner.loop && i === planner.waypoints.length - 1}
             <li>
-              <span class="swatch" style:background={CATEGORIES[cat].color}></span>
-              {CATEGORIES[cat].label}
-              <span class="muted">
-                {km(planner.totals.byCategory[cat])}
-                ({Math.round((planner.totals.byCategory[cat] / planner.totals.distanceM) * 100)}%)
-              </span>
+              <span class="badge" class:start={i === 0 || isEnd}>{i === 0 ? 'S' : isEnd ? 'E' : i}</span>
+              <span class="wp-label">{wpLabel(wp)}</span>
+              <button class="icon" title="Remove" onclick={() => planner.removeWaypoint(wp.id)}>×</button>
             </li>
-          {/if}
-        {/each}
-      </ul>
-      {#if planner.legModes.includes('direct')}
-        <p class="muted hint">Direct legs estimated at {DIRECT_SPEED_KMH} km/h.</p>
-      {/if}
-
-      {#if planner.totals.complete}
-        {#if unsaved}
-          <p class="error">Unsaved changes</p>
-        {:else if justSaved}
-          <p class="success" transition:fade={{ duration: 200 }}>Changes saved successfully!</p>
-        {/if}
-        <form class="row" onsubmit={save}>
-          {#if planner.savedId}
-            <button type="submit" title="Update the saved route" disabled={!unsaved}>Save</button>
-            <button type="submit" value="copy" title="Save this route as a new entry, leaving the original unchanged">
-              Save as copy
-            </button>
-          {:else}
-            <button type="submit" title="Keep a link to this route in this browser">Save</button>
-          {/if}
-          <button type="button" title="Copy a link to this route to share" onclick={copyLink}>
-            {copied ? 'Copied' : 'Copy link'}
-          </button>
-        </form>
-        {#if saveError}<p class="error">{saveError}</p>{/if}
-        <div class="row nav">
-          {#if mapsHref}
-            <a
-              class="button"
-              href={mapsHref}
-              target="_blank"
-              rel="noopener"
-              title="Cycling directions in {MAPS_APP_NAME[mapsApp]}, with each waypoint as a stop. Direct legs are routed by the app."
-            >
-              Open in maps
-            </a>
-          {:else}
-            <button type="button" disabled>Open in maps</button>
-          {/if}
-          <button type="button" title="Download the route as a GPX file for bike apps such as Komoot, Strava or Garmin" onclick={exportGpx}>
-            Download GPX
+            {#if i < planner.waypoints.length - 1}
+              {@const leg = planner.legs[i]}
+              <li class="leg">
+                <button
+                  class="toggle"
+                  class:direct={planner.legModes[i] === 'direct'}
+                  title="Direct ignores the router and draws a straight line (local knowledge override)"
+                  onclick={() => planner.toggleLeg(i)}
+                >
+                  {planner.legModes[i] === 'direct' ? 'Direct' : 'Route'}
+                </button>
+                {#if leg?.status === 'loading'}
+                  <span class="muted">routing…</span>
+                {:else if leg?.status === 'error'}
+                  <span class="error" title={leg.error}>routing failed — try Direct or move a point</span>
+                {:else if leg?.result}
+                  <span class="muted">{km(leg.result.distanceM)}</span>
+                {/if}
+              </li>
+            {/if}
+          {/each}
+        </ol>
+        <div class="row">
+          <button disabled={planner.optimising} onclick={() => planner.undo()}>Undo last</button>
+          <button disabled={planner.optimising} onclick={() => planner.clear()}>Clear</button>
+          <button
+            disabled={planner.optimising || planner.waypoints.length < 3}
+            title="Remove waypoints that don't change the route"
+            onclick={optimise}
+          >
+            {planner.optimising ? 'Optimising…' : 'Optimise'}
           </button>
         </div>
-        {#if !mapsHref}
-          <p class="error">
-            {MAPS_APP_NAME[mapsApp]} allows up to {MAX_STOPS[mapsApp]} stops (this route has {planner.waypoints.length - 2}).
-            Try Optimise, or Download GPX for a bike app.
-          </p>
+        {#if optimiseResult}<p class="muted hint">{optimiseResult}</p>{/if}
+        {#if linkLength > URL_WARN_LENGTH}
+          <p class="error">Link is {linkLength} characters — some apps may truncate it. Try Optimise to remove waypoints.</p>
         {/if}
-      {/if}
-    </section>
-  {/if}
+      </section>
+    {/if}
 
-  {#if saved.length}
-    <section>
-      <h2>Saved routes</h2>
-      <ul class="saved">
-        {#each saved as route (route.id)}
-          <li>
-            <span class="wp-label">
-              {route.name}
-              <span class="muted">· {km(route.distanceM)} · {new Date(route.createdAt).toLocaleDateString()}</span>
-            </span>
-            <button onclick={() => load(route)}>Load</button>
-            <button class="icon" title="Delete" onclick={() => remove(route)}>×</button>
-          </li>
-        {/each}
-      </ul>
-    </section>
-  {/if}
+    {#if planner.legs.length}
+      <section>
+        <h2>Summary</h2>
+        {#if planner.totals.loading}<p class="muted">Routing…</p>{/if}
+        <div class="stats">
+          <div><strong>{km(planner.totals.distanceM)}</strong><span>distance</span></div>
+          <div><strong>{duration(planner.totals.timeS)}</strong><span>est. time</span></div>
+          <div><strong>{Math.round(planner.totals.ascentM)} m</strong><span>ascent</span></div>
+        </div>
+        <ul class="breakdown">
+          {#each CATEGORY_ORDER as cat}
+            {#if planner.totals.byCategory[cat] > 0}
+              <li>
+                <span class="swatch" style:background={CATEGORIES[cat].color}></span>
+                {CATEGORIES[cat].label}
+                <span class="muted">
+                  {km(planner.totals.byCategory[cat])}
+                  ({Math.round((planner.totals.byCategory[cat] / planner.totals.distanceM) * 100)}%)
+                </span>
+              </li>
+            {/if}
+          {/each}
+        </ul>
+        {#if planner.legModes.includes('direct')}
+          <p class="muted hint">Direct legs estimated at {DIRECT_SPEED_KMH} km/h.</p>
+        {/if}
+
+        {#if planner.totals.complete}
+          {#if unsaved}
+            <p class="error">Unsaved changes</p>
+          {:else if justSaved}
+            <p class="success" transition:fade={{ duration: 200 }}>Changes saved successfully!</p>
+          {/if}
+          <form class="row" onsubmit={save}>
+            {#if planner.savedId}
+              <button type="submit" title="Update the saved route" disabled={!unsaved}>Save</button>
+              <button type="submit" value="copy" title="Save this route as a new entry, leaving the original unchanged">
+                Save as copy
+              </button>
+            {:else}
+              <button type="submit" title="Keep a link to this route in this browser">Save</button>
+            {/if}
+            <button type="button" title="Copy a link to this route to share" onclick={copyLink}>
+              {copied ? 'Copied' : 'Copy link'}
+            </button>
+          </form>
+          {#if saveError}<p class="error">{saveError}</p>{/if}
+          <div class="row nav">
+            {#if mapsHref}
+              <a
+                class="button"
+                href={mapsHref}
+                target="_blank"
+                rel="noopener"
+                title="Cycling directions in {MAPS_APP_NAME[mapsApp]}, with each waypoint as a stop. Direct legs are routed by the app."
+              >
+                Open in maps
+              </a>
+            {:else}
+              <button type="button" disabled>Open in maps</button>
+            {/if}
+            <button type="button" title="Download the route as a GPX file for bike apps such as Komoot, Strava or Garmin" onclick={exportGpx}>
+              Download GPX
+            </button>
+          </div>
+          {#if !mapsHref}
+            <p class="error">
+              {MAPS_APP_NAME[mapsApp]} allows up to {MAX_STOPS[mapsApp]} stops (this route has {planner.waypoints.length - 2}).
+              Try Optimise, or Download GPX for a bike app.
+            </p>
+          {/if}
+        {/if}
+      </section>
+    {/if}
+
+    {#if saved.length}
+      <section>
+        <h2>Saved routes</h2>
+        <ul class="saved">
+          {#each saved as route (route.id)}
+            <li>
+              <span class="wp-label">
+                {route.name}
+                <span class="muted">· {km(route.distanceM)} · {new Date(route.createdAt).toLocaleDateString()}</span>
+              </span>
+              <button onclick={() => load(route)}>Load</button>
+              <button class="icon" title="Delete" onclick={() => remove(route)}>×</button>
+            </li>
+          {/each}
+        </ul>
+      </section>
+    {/if}
+  </div>
 </aside>
 
 <style>
@@ -260,6 +277,42 @@
   h1 {
     font-size: 18px;
     margin: 0 0 12px;
+  }
+  .fold {
+    display: none;
+  }
+  @media (max-width: 700px) {
+    /* A bare chevron centred on the planner's top edge; it points up to show, down to hide. */
+    .fold {
+      display: flex;
+      margin: 0 auto 10px;
+      padding: 4px 28px;
+      border: none;
+      background: none;
+      color: #666;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .fold:hover {
+      background: none;
+      color: #222;
+    }
+    .fold svg {
+      transition: transform 0.2s ease;
+    }
+    .fold.open svg {
+      transform: rotate(180deg);
+    }
+    .folded {
+      display: none;
+    }
+    h1:has(+ .folded) {
+      margin-bottom: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fold svg {
+      transition: none;
+    }
   }
   h2 {
     font-size: 14px;
