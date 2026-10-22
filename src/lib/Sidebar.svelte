@@ -97,7 +97,7 @@
     imageError = '';
     try {
       const legs = planner.legs.flatMap((l) => (l.result ? [l.result] : []));
-      downloadFile(planner.name || 'route', 'jpg', await renderRouteImage(planner.waypoints, legs, planner.loop));
+      downloadFile(planner.name || 'route', 'png', await renderRouteImage(planner.waypoints, legs, planner.loop));
     } catch {
       imageError = 'Could not create the image. Try again shortly.';
     } finally {
@@ -235,7 +235,7 @@
                   {/if}
                   <button
                     type="button"
-                    title="Download a JPEG of the route, zoomed to fit it, with the start and end marked"
+                    title="Download a high-resolution PNG of the route, zoomed to fit it, with the start and end marked"
                     disabled={exportingImage}
                     onclick={exportImage}
                   >

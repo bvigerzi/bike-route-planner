@@ -1,5 +1,5 @@
 import { CATEGORIES } from './categories';
-import { IMAGE_MAX_ASPECT, IMAGE_MAX_PX, IMAGE_PADDING_PX, TILE_SIZE, TILE_URL } from './config';
+import { IMAGE_LINE_SCALE, IMAGE_MAX_ASPECT, IMAGE_MAX_PX, IMAGE_PADDING_PX, IMAGE_SCALE, TILE_MAX_ZOOM, TILE_SIZE, TILE_URL } from './config';
 import type { LatLng, LegResult } from './routing';
 
 // Renders the route to a canvas from the raw tiles, independent of the on-screen map (and its library).
@@ -84,33 +84,42 @@ function drawMarker(ctx: CanvasRenderingContext2D, x: number, y: number, text: s
 }
 
 /**
- * A JPEG of the route, zoomed to fit every waypoint and the routed track. Only the start and end
- * are marked, so the route itself stays clear.
+ * A PNG of the route, zoomed to fit every waypoint and the routed track, at IMAGE_SCALE times the
+ * layout size. Only the start and end are marked, so the route itself stays clear.
  */
 export async function renderRouteImage(waypoints: LatLng[], legs: LegResult[], loop: boolean): Promise<Blob> {
   const segments = legs.flatMap((l) => l.segments);
   const view = fitView([...waypoints.map((w): [number, number] => [w.lat, w.lng]), ...segments.flatMap((s) => s.coords)]);
   const { zoom, left, top, width, height } = view;
   const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = width * IMAGE_SCALE;
+  canvas.height = height * IMAGE_SCALE;
   const ctx = canvas.getContext('2d')!;
   ctx.fillStyle = '#ddd';
-  ctx.fillRect(0, 0, width, height);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Tiles; any that fail to load are left blank.
-  const n = 2 ** zoom;
+  // Tiles from a deeper zoom, at their own resolution, in canvas pixels. Past the deepest zoom the
+  // servers provide, those tiles are stretched instead.
+  const tileZoom = Math.min(zoom + Math.log2(IMAGE_SCALE), TILE_MAX_ZOOM);
+  const tileScale = IMAGE_SCALE / 2 ** (tileZoom - zoom);
+  const tileSize = TILE_SIZE * tileScale;
+  const [tileLeft, tileTop] = [left * IMAGE_SCALE, top * IMAGE_SCALE];
+  // Any tiles that fail to load are left blank.
+  const n = 2 ** tileZoom;
   const tiles: Promise<void>[] = [];
-  for (let ty = Math.floor(top / TILE_SIZE); ty <= Math.floor((top + height - 1) / TILE_SIZE); ty++) {
+  for (let ty = Math.floor(tileTop / tileSize); ty <= Math.floor((tileTop + canvas.height - 1) / tileSize); ty++) {
     if (ty < 0 || ty >= n) continue;
-    for (let tx = Math.floor(left / TILE_SIZE); tx <= Math.floor((left + width - 1) / TILE_SIZE); tx++) {
-      const [dx, dy] = [tx * TILE_SIZE - left, ty * TILE_SIZE - top];
-      tiles.push(loadTile(zoom, ((tx % n) + n) % n, ty).then((img) => {
-        if (img) ctx.drawImage(img, dx, dy);
+    for (let tx = Math.floor(tileLeft / tileSize); tx <= Math.floor((tileLeft + canvas.width - 1) / tileSize); tx++) {
+      const [dx, dy] = [tx * tileSize - tileLeft, ty * tileSize - tileTop];
+      tiles.push(loadTile(tileZoom, ((tx % n) + n) % n, ty).then((img) => {
+        if (img) ctx.drawImage(img, dx, dy, tileSize, tileSize);
       }));
     }
   }
   await Promise.all(tiles);
+
+  // Everything else is drawn in layout pixels, scaled up so it stays sharp.
+  ctx.scale(IMAGE_SCALE, IMAGE_SCALE);
 
   // Route, styled as on the map: a white casing under each coloured line.
   const toPx = (lat: number, lng: number): [number, number] => {
@@ -125,13 +134,15 @@ export async function renderRouteImage(waypoints: LatLng[], legs: LegResult[], l
     ctx.stroke();
   };
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-  ctx.lineWidth = 9;
+  // Line sizes are in map pixels; the context is scaled by IMAGE_SCALE, so convert to IMAGE_LINE_SCALE.
+  const line = IMAGE_LINE_SCALE / IMAGE_SCALE;
+  ctx.lineWidth = 9 * line;
   for (const seg of segments) stroke(seg.coords);
-  ctx.lineWidth = 5;
+  ctx.lineWidth = 5 * line;
   for (const seg of segments) {
     const style = CATEGORIES[seg.category];
     ctx.strokeStyle = style.color;
-    ctx.setLineDash(style.dashed ? [8, 8] : []);
+    ctx.setLineDash(style.dashed ? [8 * line, 8 * line] : []);
     stroke(seg.coords);
   }
   ctx.setLineDash([]);
@@ -155,6 +166,6 @@ export async function renderRouteImage(waypoints: LatLng[], legs: LegResult[], l
   ctx.fillText(credit, width - 5, height - 9);
 
   return new Promise((resolve, reject) =>
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not create the image'))), 'image/jpeg', 0.9),
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not create the image'))), 'image/png'),
   );
 }

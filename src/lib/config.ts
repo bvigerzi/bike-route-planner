@@ -9,6 +9,8 @@ export const DIRECT_SPEED_KMH = 15;
 
 export const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 export const TILE_SIZE = 256;
+// The deepest zoom the OSM tile servers provide.
+export const TILE_MAX_ZOOM = 19;
 
 // "Export image" picks the closest zoom at which the route, plus padding, fits within this many pixels each way.
 // It is kept modest because every tile in the image is fetched from the OSM tile servers.
@@ -16,6 +18,13 @@ export const IMAGE_MAX_PX = 1600;
 export const IMAGE_PADDING_PX = 40;
 // The image is widened (or heightened) so neither side is more than this many times the other.
 export const IMAGE_MAX_ASPECT = 2;
+// The image is rendered at this multiple of the layout above, with tiles from a correspondingly deeper zoom,
+// so zooming in on it shows more map detail. A power of 2; 2 keeps it within the canvas size iOS Safari allows.
+export const IMAGE_SCALE = 2;
+// The route line's width (and dash length) in the image, as a multiple of its width on the map. 1 matches the
+// map at the image's tile zoom, so it covers as little of the streets as possible; higher stands out more when
+// the whole image is viewed at once. The markers and attribution always scale with IMAGE_SCALE.
+export const IMAGE_LINE_SCALE = 1.5;
 
 export const DEFAULT_CENTER: [number, number] = [-37.8136, 144.9631]; // Melbourne
 export const DEFAULT_ZOOM = 13;
