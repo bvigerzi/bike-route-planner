@@ -1,0 +1,162 @@
+<script lang="ts">
+  import L from 'leaflet';
+  import 'leaflet/dist/leaflet.css';
+  import { onMount } from 'svelte';
+  import { CATEGORIES, CATEGORY_ORDER } from './categories';
+  import { DEFAULT_CENTER, DEFAULT_ZOOM } from './config';
+  import { planner } from './state.svelte';
+
+  // All Leaflet usage lives in this component so the map library can be swapped later.
+  let container: HTMLDivElement;
+  let map: L.Map | undefined = $state();
+  const markerLayer = L.layerGroup();
+  const routeLayer = L.layerGroup();
+
+  onMount(() => {
+    const m = L.map(container).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · Routing <a href="https://brouter.de">BRouter</a>',
+    }).addTo(m);
+    routeLayer.addTo(m);
+    markerLayer.addTo(m);
+
+    const updateView = () => {
+      const b = m.getBounds();
+      planner.view = { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() };
+    };
+    m.on('moveend', updateView);
+    m.on('click', (e: L.LeafletMouseEvent) => planner.addWaypoint(e.latlng.lat, e.latlng.lng));
+    updateView();
+    map = m;
+    return () => m.remove();
+  });
+
+  // Markers
+  $effect(() => {
+    markerLayer.clearLayers();
+    planner.waypoints.forEach((wp, i) => {
+      const isStart = i === 0;
+      const icon = L.divIcon({
+        className: '',
+        html: `<div class="wp-marker${isStart ? ' start' : ''}">${isStart ? 'S' : i}</div>`,
+        iconSize: [26, 26],
+        iconAnchor: [13, 13],
+      });
+      const marker = L.marker([wp.lat, wp.lng], { icon, draggable: true })
+        .bindTooltip(`${isStart ? 'Start / meeting point' : `Waypoint ${i}`} — drag to move, click to remove`)
+        .on('dragend', () => {
+          const ll = marker.getLatLng();
+          planner.moveWaypoint(wp.id, ll.lat, ll.lng);
+        })
+        .on('click', () => planner.removeWaypoint(wp.id));
+      markerLayer.addLayer(marker);
+    });
+  });
+
+  // Route lines
+  $effect(() => {
+    routeLayer.clearLayers();
+    planner.legs.forEach((leg, i) => {
+      if (leg.result) {
+        for (const seg of leg.result.segments) {
+          const style = CATEGORIES[seg.category];
+          L.polyline(seg.coords, { color: '#fff', weight: 9, opacity: 0.8, interactive: false }).addTo(routeLayer);
+          L.polyline(seg.coords, {
+            color: style.color,
+            weight: 5,
+            dashArray: style.dashed ? '8 8' : undefined,
+            interactive: false,
+          }).addTo(routeLayer);
+        }
+      } else {
+        // Placeholder while routing, or on error.
+        const a = planner.waypoints[i];
+        const b = planner.waypoints[i + 1];
+        if (!a || !b) return;
+        L.polyline(
+          [
+            [a.lat, a.lng],
+            [b.lat, b.lng],
+          ],
+          { color: leg.status === 'error' ? '#d62728' : '#999', weight: 3, dashArray: '4 6', interactive: false },
+        ).addTo(routeLayer);
+      }
+    });
+  });
+
+  // Zoom to requested points
+  $effect(() => {
+    const pts = planner.focus;
+    if (!map || !pts?.length) return;
+    if (pts.length === 1) map.setView(pts[0], Math.max(map.getZoom(), 15));
+    else map.fitBounds(pts, { padding: [40, 40] });
+  });
+</script>
+
+<div class="map-wrap">
+  <div class="map" bind:this={container}></div>
+  <div class="legend">
+    {#each CATEGORY_ORDER as cat}
+      <div class="legend-row">
+        <span
+          class="swatch"
+          style:background={CATEGORIES[cat].dashed ? 'none' : CATEGORIES[cat].color}
+          style:border-top={CATEGORIES[cat].dashed ? `3px dashed ${CATEGORIES[cat].color}` : 'none'}
+        ></span>
+        {CATEGORIES[cat].label}
+      </div>
+    {/each}
+  </div>
+</div>
+
+<style>
+  .map-wrap {
+    position: relative;
+    height: 100%;
+  }
+  .map {
+    height: 100%;
+    cursor: crosshair;
+  }
+  .legend {
+    position: absolute;
+    right: 10px;
+    bottom: 24px;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.92);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  }
+  .legend-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    line-height: 1.6;
+  }
+  .swatch {
+    display: inline-block;
+    width: 22px;
+    height: 4px;
+    border-radius: 2px;
+  }
+  :global(.wp-marker) {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #2c3e50;
+    color: #fff;
+    border: 2px solid #fff;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font: bold 12px system-ui, sans-serif;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  }
+  :global(.wp-marker.start) {
+    background: #c0392b;
+  }
+</style>

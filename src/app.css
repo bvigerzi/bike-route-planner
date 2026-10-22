@@ -1,0 +1,35 @@
+html,
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: #222;
+  background: #fff;
+}
+
+button,
+input {
+  font: inherit;
+  font-size: 13px;
+}
+
+button {
+  padding: 4px 10px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  background: #f7f7f7;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #eee;
+}
+
+input {
+  padding: 4px 8px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+}
+
+.muted {
+  color: #777;
+}
