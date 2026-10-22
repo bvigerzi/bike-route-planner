@@ -26,7 +26,19 @@
       planner.view = { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() };
     };
     m.on('moveend', updateView);
-    m.on('click', (e: L.LeafletMouseEvent) => planner.addWaypoint(e.latlng.lat, e.latlng.lng));
+    // Leaflet closes an open popup on preclick but still fires click; don't treat that dismissal as a new waypoint.
+    let popupOpen = false;
+    let dismissing = false;
+    m.on('popupopen', () => (popupOpen = true));
+    m.on('popupclose', () => (popupOpen = false));
+    m.on('preclick', () => (dismissing = popupOpen));
+    m.on('click', (e: L.LeafletMouseEvent) => {
+      if (dismissing) {
+        dismissing = false;
+        return;
+      }
+      planner.addWaypoint(e.latlng.lat, e.latlng.lng);
+    });
     updateView();
     map = m;
     return () => m.remove();
@@ -42,14 +54,26 @@
         html: `<div class="wp-marker${isStart ? ' start' : ''}">${isStart ? 'S' : i}</div>`,
         iconSize: [26, 26],
         iconAnchor: [13, 13],
+        popupAnchor: [0, -13],
       });
+      // Left-click only offers removal, so a press that was meant as a drag can't delete the point.
+      const removeBtn = L.DomUtil.create('button', 'wp-remove');
+      removeBtn.type = 'button';
+      removeBtn.textContent = 'Remove?';
+      removeBtn.onclick = () => planner.removeWaypoint(wp.id);
       const marker = L.marker([wp.lat, wp.lng], { icon, draggable: true })
-        .bindTooltip(`${isStart ? 'Start / meeting point' : `Waypoint ${i}`} — drag to move, click to remove`)
+        .bindTooltip(`${isStart ? 'Start / meeting point' : `Waypoint ${i}`} — drag to move, click for options, right-click to remove`)
+        .bindPopup(removeBtn, { closeButton: false, className: 'wp-popup' })
+        .on('popupopen', () => marker.closeTooltip())
+        .on('dragstart', () => marker.closePopup())
         .on('dragend', () => {
           const ll = marker.getLatLng();
           planner.moveWaypoint(wp.id, ll.lat, ll.lng);
         })
-        .on('click', () => planner.removeWaypoint(wp.id));
+        .on('contextmenu', (e: L.LeafletMouseEvent) => {
+          L.DomEvent.preventDefault(e.originalEvent);
+          planner.removeWaypoint(wp.id);
+        });
       markerLayer.addLayer(marker);
     });
   });
@@ -158,5 +182,17 @@
   }
   :global(.wp-marker.start) {
     background: #c0392b;
+  }
+  :global(.wp-popup .leaflet-popup-content) {
+    margin: 6px;
+  }
+  :global(.wp-remove) {
+    background: #c0392b;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font: bold 12px system-ui, sans-serif;
+    cursor: pointer;
   }
 </style>

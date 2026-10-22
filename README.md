@@ -15,7 +15,7 @@ yarn build      # static output in dist/
 
 - **Click the map** to set the start / meeting point (red **S**), then click again to add waypoints. You can also **search** for a place and choose *Set start* or *Add*.
 - Points you place **snap** onto the nearest rideable way (road, bike path, shared path, etc.) if one is within 30 m. Further away, they stay exactly where you put them. "Rideable" means any way the BRouter profile can route on.
-- **Drag** a marker to move it, and **click** a marker (or ×) to remove it.
+- **Drag** a marker to move it. **Click** a marker and choose *Remove?*, or **right-click** it (or use × in the sidebar) to remove it.
 - Each leg has a **Route / Direct** toggle. *Direct* ignores the router and draws a straight line. Use it where you know something the map doesn't, e.g. a footpath that's fine to ride.
 - **Optimise** removes waypoints you don't need. It tries each waypoint between two routed legs in turn. If routing past that point gives the same path (within 10 m), the waypoint is removed. If not, it is kept.
 - The summary shows distance, estimated time, ascent and the distance in each path type.
