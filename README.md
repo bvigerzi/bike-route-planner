@@ -19,7 +19,7 @@ yarn build      # static output in dist/
 - Each leg has a **Route / Direct** toggle. *Direct* ignores the router and draws a straight line. Use it where you know something the map doesn't, e.g. a footpath that's fine to ride.
 - **Optimise** removes waypoints you don't need. It tries each waypoint between two routed legs in turn. If routing past that point gives the same path (within 10 m), the waypoint is removed. If not, it is kept.
 - The summary shows distance, estimated time, ascent and the distance in each path type.
-- The route (waypoints, leg modes, place names and the **route name**) is kept in the page URL as you edit. Reloading, going Back/Forward to the page, bookmarking or sharing the link brings the route back. **Copy link** copies it. No server or account is involved.
+- The route (waypoints, leg modes, place names, waypoint names and the **route name**) is kept in the page URL as you edit. Reloading, going Back/Forward to the page, bookmarking or sharing the link brings the route back. **Copy link** copies it. No server or account is involved.
 - **Save** keeps the route's name and link in browser localStorage, so it shows under *Saved routes* to load again later.
 - **Open in maps** opens cycling directions in a maps app, with every waypoint as a stop. On iPhone and iPad it uses an Apple Maps link, which iOS may pass to your default navigation app. Everywhere else it uses Google Maps, which opens its app on Android. Google Maps allows at most 9 stops between the start and the end, so the button is disabled for longer routes. The maps app does its own routing between stops, so *Direct* legs aren't kept.
 - **Download GPX** saves the exact routed track, with the waypoints, for bike apps such as Komoot, Strava, Garmin or OsmAnd.
@@ -27,7 +27,7 @@ yarn build      # static output in dist/
 
 ### Route links
 
-The whole route is stored in the URL hash as a compact binary encoding written in base64url, e.g. `#AgtTdW5kYXkgcmlkZQffy80D7MjpDRFGZWRlcmF0aW9uIFNxdWFyZdAF5AoAoB_QDwAC` (a route named *Sunday ride* with three waypoints, one labelled *Federation Square*, and a direct second leg). The link isn't a key into a database. It holds the name, the waypoints (5 decimal places, about 1 m, each stored as a small offset from the one before), their place names, and the leg modes. Legs are routed again when a link is opened. The format is in `src/lib/routeUrl.ts`. Older readable links (`#v=1&n=...&w=...`) still open.
+The whole route is stored in the URL hash as a compact binary encoding written in base64url, e.g. `#AgtTdW5kYXkgcmlkZQffy80D7MjpDRFGZWRlcmF0aW9uIFNxdWFyZdAF5AoAoB_QDwAC` (a route named *Sunday ride* with three waypoints, one labelled *Federation Square*, and a direct second leg). The link isn't a key into a database. It holds the name, the waypoints (5 decimal places, about 1 m, each stored as a small offset from the one before), their place names, any names you gave them, and the leg modes. Legs are routed again when a link is opened. The format is in `src/lib/routeUrl.ts`. Older readable links (`#v=1&n=...&w=...`) still open.
 
 Each waypoint adds about 7 characters, plus its place name, so 100 waypoints is about 0.7 KB. The hash is never sent to a server, and browsers accept far longer URLs, so there's no fixed limit on waypoints. Some apps cut off links longer than about 2,000 characters, though, so the sidebar warns past that. Optimise shortens the link.
 
