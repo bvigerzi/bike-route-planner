@@ -1,3 +1,4 @@
+import { encodeRoute } from './routeUrl';
 import type { LegMode, LegResult } from './routing';
 
 export interface Waypoint {
@@ -11,6 +12,17 @@ export interface SavedRoute {
   id: string;
   name: string;
   createdAt: string;
+  /** The route's URL hash (see routeUrl.ts), without the leading '#'. */
+  hash: string;
+  /** Kept only for display in the list. */
+  distanceM: number;
+}
+
+/** Saved routes from before routes were kept in the URL. */
+interface LegacySavedRoute {
+  id: string;
+  name: string;
+  createdAt: string;
   waypoints: Waypoint[];
   legModes: LegMode[];
   legs: LegResult[];
@@ -18,10 +30,21 @@ export interface SavedRoute {
 
 const KEY = 'brp.routes';
 
+function migrate(r: SavedRoute | LegacySavedRoute): SavedRoute {
+  if (!('waypoints' in r)) return r;
+  return {
+    id: r.id,
+    name: r.name,
+    createdAt: r.createdAt,
+    hash: encodeRoute({ name: r.name, waypoints: r.waypoints, legModes: r.legModes }),
+    distanceM: r.legs.reduce((sum, l) => sum + l.distanceM, 0),
+  };
+}
+
 export function loadRoutes(): SavedRoute[] {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? JSON.parse(raw) : [];
+    return raw ? JSON.parse(raw).map(migrate) : [];
   } catch {
     return [];
   }

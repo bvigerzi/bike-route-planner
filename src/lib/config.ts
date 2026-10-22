@@ -15,3 +15,6 @@ export const OPTIMISE_TOLERANCE_M = 10;
 
 // New waypoints move onto the nearest rideable way if it is within this many metres; otherwise they stay where placed.
 export const SNAP_RADIUS_M = 30;
+
+// Warn when the route's link is longer than this; some apps truncate long links when shared.
+export const URL_WARN_LENGTH = 2000;

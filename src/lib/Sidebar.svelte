@@ -1,14 +1,18 @@
 <script lang="ts">
   import { CATEGORIES, CATEGORY_ORDER } from './categories';
-  import { DIRECT_SPEED_KMH } from './config';
+  import { DIRECT_SPEED_KMH, URL_WARN_LENGTH } from './config';
+  import { decodeRoute, encodeRoute } from './routeUrl';
   import SearchBox from './SearchBox.svelte';
   import { planner } from './state.svelte';
   import { loadRoutes, saveRoutes, type SavedRoute, type Waypoint } from './storage';
 
   let saved = $state.raw<SavedRoute[]>(loadRoutes());
-  let routeName = $state('');
   let saveError = $state('');
   let optimiseResult = $state('');
+  let copied = $state(false);
+
+  const hash = $derived(encodeRoute(planner.toState()));
+  const linkLength = $derived(location.origin.length + location.pathname.length + location.search.length + 1 + hash.length);
 
   const km = (m: number) => `${(m / 1000).toFixed(1)} km`;
   const duration = (s: number) => {
@@ -19,11 +23,17 @@
 
   function save(e: SubmitEvent) {
     e.preventDefault();
-    const name = routeName.trim() || `Route ${new Date().toLocaleString()}`;
-    const next = [planner.toSaved(name), ...saved];
+    planner.name = planner.name.trim() || `Route ${new Date().toLocaleString()}`;
+    const route: SavedRoute = {
+      id: crypto.randomUUID(),
+      name: planner.name,
+      createdAt: new Date().toISOString(),
+      hash: encodeRoute(planner.toState()),
+      distanceM: planner.totals.distanceM,
+    };
+    const next = [route, ...saved];
     if (saveRoutes(next)) {
       saved = next;
-      routeName = '';
       saveError = '';
     } else {
       saveError = 'Could not save — browser storage is unavailable or full.';
@@ -36,13 +46,26 @@
     if (saveRoutes(next)) saved = next;
   }
 
+  function load(route: SavedRoute) {
+    const state = decodeRoute(route.hash);
+    if (state) planner.load(state);
+  }
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(`${location.origin}${location.pathname}${location.search}#${hash}`);
+      copied = true;
+      setTimeout(() => (copied = false), 1500);
+    } catch {
+      // Clipboard unavailable (e.g. insecure context); the address bar still has the link.
+    }
+  }
+
   async function optimise() {
     optimiseResult = '';
     const removed = await planner.optimise();
     optimiseResult = removed ? `Removed ${removed} unneeded waypoint${removed === 1 ? '' : 's'}.` : 'No waypoints could be removed.';
   }
-
-  const routeDistance = (r: SavedRoute) => r.legs.reduce((sum, l) => sum + l.distanceM, 0);
 </script>
 
 <aside>
@@ -60,6 +83,7 @@
   {#if planner.waypoints.length}
     <section>
       <h2>Route</h2>
+      <input class="name" placeholder="Route name" bind:value={planner.name} />
       <ol class="waypoints">
         {#each planner.waypoints as wp, i (wp.id)}
           <li>
@@ -101,6 +125,9 @@
         </button>
       </div>
       {#if optimiseResult}<p class="muted hint">{optimiseResult}</p>{/if}
+      {#if linkLength > URL_WARN_LENGTH}
+        <p class="error">Link is {linkLength} characters — some apps may truncate it. Try Optimise to remove waypoints.</p>
+      {/if}
     </section>
   {/if}
 
@@ -133,8 +160,10 @@
 
       {#if planner.totals.complete}
         <form class="row" onsubmit={save}>
-          <input placeholder="Route name" bind:value={routeName} />
-          <button type="submit">Save</button>
+          <button type="submit" title="Keep a link to this route in this browser">Save</button>
+          <button type="button" title="Copy a link to this route to share" onclick={copyLink}>
+            {copied ? 'Copied' : 'Copy link'}
+          </button>
         </form>
         {#if saveError}<p class="error">{saveError}</p>{/if}
       {/if}
@@ -149,9 +178,9 @@
           <li>
             <span class="wp-label">
               {route.name}
-              <span class="muted">· {km(routeDistance(route))} · {new Date(route.createdAt).toLocaleDateString()}</span>
+              <span class="muted">· {km(route.distanceM)} · {new Date(route.createdAt).toLocaleDateString()}</span>
             </span>
-            <button onclick={() => planner.load(route)}>Load</button>
+            <button onclick={() => load(route)}>Load</button>
             <button class="icon" title="Delete" onclick={() => remove(route)}>×</button>
           </li>
         {/each}
@@ -252,9 +281,10 @@
     display: flex;
     gap: 6px;
   }
-  .row input {
-    flex: 1;
-    min-width: 0;
+  .name {
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 8px;
   }
   .stats {
     display: flex;

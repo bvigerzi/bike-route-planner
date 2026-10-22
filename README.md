@@ -18,7 +18,15 @@ yarn build      # static output in dist/
 - **Drag** a marker to move it, and **click** a marker (or ×) to remove it.
 - Each leg has a **Route / Direct** toggle. *Direct* ignores the router and draws a straight line. Use it where you know something the map doesn't, e.g. a footpath that's fine to ride.
 - **Optimise** removes waypoints you don't need. It tries each waypoint between two routed legs in turn. If routing past that point gives the same path (within 10 m), the waypoint is removed. If not, it is kept.
-- The summary shows distance, estimated time, ascent and the distance in each path type. Finished routes can be **saved** to browser localStorage and loaded again later.
+- The summary shows distance, estimated time, ascent and the distance in each path type.
+- The route (waypoints, leg modes, place names and the **route name**) is kept in the page URL as you edit. Reloading, going Back/Forward to the page, bookmarking or sharing the link brings the route back. **Copy link** copies it. No server or account is involved.
+- **Save** keeps the route's name and link in browser localStorage, so it shows under *Saved routes* to load again later.
+
+### Route links
+
+The route is stored in the URL hash, e.g. `#v=1&n=Sunday%20ride&m=rd&w=-37.8136,144.9631,Federation%20Square;-37.81,144.97;-37.79,144.98`: `n` is the name, `w` the waypoints (`lat,lng[,label]`, 5 decimal places, about 1 m), and `m` the leg modes (`r` route, `d` direct; left out if every leg is routed). Legs are routed again when a link is opened. The format is in `src/lib/routeUrl.ts`.
+
+Each waypoint adds about 20 characters, plus its place name, so 100 waypoints is about 2 KB. The hash is never sent to a server, and browsers accept far longer URLs, so there's no fixed limit on waypoints. Some apps cut off links longer than about 2,000 characters, though, so the sidebar warns past that. Optimise shortens the link.
 
 ### Path colours
 
@@ -51,3 +59,4 @@ Settings (router URL, profile, direct-leg speed, snap radius, default map centre
 - Search-as-you-type using Photon.
 - A modifier key (e.g. Alt+click) to place a point exactly, without snapping.
 - GPX export.
+- Short route links: a compact (e.g. base64) encoding of the whole route, still with no database.

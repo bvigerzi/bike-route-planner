@@ -1,8 +1,9 @@
 import { CATEGORY_ORDER, type Category } from './categories';
 import type { Viewbox } from './geocode';
 import { OPTIMISE_TOLERANCE_M, SNAP_RADIUS_M } from './config';
+import { roundCoord, type RouteState } from './routeUrl';
 import { directLeg, legKey, pathLength, routeLeg, samePath, snapToPath, type LatLng, type LegMode, type LegResult } from './routing';
-import type { SavedRoute, Waypoint } from './storage';
+import type { Waypoint } from './storage';
 
 export interface LegState {
   key: string;
@@ -12,6 +13,7 @@ export interface LegState {
 }
 
 class Planner {
+  name = $state('');
   /** Index 0 is the start / meeting point. */
   waypoints = $state<Waypoint[]>([]);
   /** legModes[i] is the mode of the leg from waypoints[i] to waypoints[i + 1]. */
@@ -49,6 +51,7 @@ class Planner {
   });
 
   addWaypoint(lat: number, lng: number, label?: string) {
+    [lat, lng] = [roundCoord(lat), roundCoord(lng)];
     const id = crypto.randomUUID();
     this.waypoints.push({ id, lat, lng, label });
     if (this.waypoints.length > 1) this.legModes.push('route');
@@ -57,6 +60,7 @@ class Planner {
 
   setStart(lat: number, lng: number, label?: string) {
     if (this.waypoints.length === 0) return this.addWaypoint(lat, lng, label);
+    [lat, lng] = [roundCoord(lat), roundCoord(lng)];
     const id = crypto.randomUUID();
     this.snapping.delete(this.waypoints[0].id);
     this.waypoints[0] = { id, lat, lng, label };
@@ -66,6 +70,7 @@ class Planner {
   moveWaypoint(id: string, lat: number, lng: number) {
     const wp = this.waypoints.find((w) => w.id === id);
     if (!wp) return;
+    [lat, lng] = [roundCoord(lat), roundCoord(lng)];
     wp.lat = lat;
     wp.lng = lng;
     wp.label = undefined;
@@ -87,6 +92,7 @@ class Planner {
   }
 
   clear() {
+    this.name = '';
     this.waypoints = [];
     this.legModes = [];
     this.snapping.clear();
@@ -148,26 +154,21 @@ class Planner {
     this.refresh();
   }
 
-  load(route: SavedRoute) {
+  /** Replace the route. Its points are taken as already snapped. */
+  load(state: RouteState) {
     this.snapping.clear();
-    this.waypoints = $state.snapshot(route.waypoints);
-    this.legModes = [...route.legModes];
-    this.legs = route.legs.map((result, i) => ({
-      key: legKey(route.waypoints[i], route.waypoints[i + 1], route.legModes[i]),
-      status: 'ok',
-      result,
-    }));
-    this.focus = route.waypoints.map((w) => [w.lat, w.lng]);
+    this.name = state.name;
+    this.waypoints = state.waypoints.map(({ lat, lng, label }) => ({ id: crypto.randomUUID(), lat, lng, label }));
+    this.legModes = [...state.legModes];
+    this.refresh();
+    if (state.waypoints.length) this.focus = state.waypoints.map((w) => [w.lat, w.lng]);
   }
 
-  toSaved(name: string): SavedRoute {
+  toState(): RouteState {
     return {
-      id: crypto.randomUUID(),
-      name,
-      createdAt: new Date().toISOString(),
-      waypoints: $state.snapshot(this.waypoints),
+      name: this.name,
+      waypoints: this.waypoints.map(({ lat, lng, label }) => ({ lat, lng, label })),
       legModes: $state.snapshot(this.legModes),
-      legs: this.legs.map((l) => l.result!),
     };
   }
 
@@ -210,8 +211,8 @@ class Planner {
       this.snapping.delete(id);
       const wp = this.waypoints.find((w) => w.id === id);
       if (wp) {
-        wp.lat = p.lat;
-        wp.lng = p.lng;
+        wp.lat = roundCoord(p.lat);
+        wp.lng = roundCoord(p.lng);
       }
       this.refresh();
     });
