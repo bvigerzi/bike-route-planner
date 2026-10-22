@@ -32,5 +32,13 @@ export const BROUTER_THROTTLE = {
   maxRetries: 3,
 };
 
+// Routed legs are kept in localStorage for this long, so reopening a route doesn't query BRouter again.
+// The age counts from when the leg was fetched, so map data is never more than this stale.
+// Bump LEG_CACHE_VERSION whenever parseBRouter/classify change what a cached LegResult means.
+export const LEG_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+export const LEG_CACHE_VERSION = 1;
+// Caps the cache well under localStorage's ~5M-character quota, leaving room for saved routes.
+export const LEG_CACHE_MAX_CHARS = 1_000_000;
+
 // Google Maps directions links take at most this many stops between origin and destination.
 export const MAX_GOOGLE_STOPS = 9;

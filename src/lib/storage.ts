@@ -1,5 +1,5 @@
 import { decodeRoute, encodeRoute } from './routeUrl';
-import type { LegMode, LegResult } from './routing';
+import { legCache, type LegMode, type LegResult } from './routing';
 
 export interface Waypoint {
   id: string;
@@ -56,10 +56,18 @@ export function loadRoutes(): SavedRoute[] {
 
 /** Returns false if the write failed (e.g. storage full or unavailable). */
 export function saveRoutes(routes: SavedRoute[]): boolean {
+  const raw = JSON.stringify(routes);
   try {
-    localStorage.setItem(KEY, JSON.stringify(routes));
+    localStorage.setItem(KEY, raw);
     return true;
   } catch {
-    return false;
+    // Saved routes matter more than cached legs, so free their space and try again.
+    legCache.clear();
+    try {
+      localStorage.setItem(KEY, raw);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

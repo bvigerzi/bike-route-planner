@@ -1,5 +1,6 @@
 import { classify, type Category } from './categories';
-import { BROUTER_PROFILE, BROUTER_THROTTLE, BROUTER_URL, DIRECT_SPEED_KMH } from './config';
+import { BROUTER_PROFILE, BROUTER_THROTTLE, BROUTER_URL, DIRECT_SPEED_KMH, LEG_CACHE_MAX_CHARS, LEG_CACHE_TTL_MS, LEG_CACHE_VERSION } from './config';
+import { LegCache } from './legCache';
 import { isRejected, Throttle } from './throttle';
 
 export type LatLng = { lat: number; lng: number };
@@ -78,6 +79,13 @@ export function parseBRouter(geojson: any): LegResult {
 
 const cache = new Map<string, Promise<LegResult>>();
 
+/** Survives reloads, so reopening a recent route doesn't query BRouter again. */
+export const legCache = new LegCache({
+  ttlMs: LEG_CACHE_TTL_MS,
+  maxChars: LEG_CACHE_MAX_CHARS,
+  namespace: `v${LEG_CACHE_VERSION}:${BROUTER_PROFILE}`,
+});
+
 /** Every BRouter request goes through this, so rapid edits and optimise don't flood the server. */
 const brouter = new Throttle(BROUTER_THROTTLE);
 
@@ -85,6 +93,12 @@ export function routeLeg(a: LatLng, b: LatLng): Promise<LegResult> {
   const key = legKey(a, b, 'route');
   let pending = cache.get(key);
   if (!pending) {
+    const stored = legCache.get(key);
+    if (stored) {
+      pending = Promise.resolve(stored);
+      cache.set(key, pending);
+      return pending;
+    }
     const params = new URLSearchParams({
       lonlats: `${a.lng},${a.lat}|${b.lng},${b.lat}`,
       profile: BROUTER_PROFILE,
@@ -97,7 +111,9 @@ export function routeLeg(a: LatLng, b: LatLng): Promise<LegResult> {
         res = res!;
         if (isRejected(res.status)) throw new Error(`BRouter is refusing requests (${res.status}); wait a moment and try again`);
         if (!res.ok) throw new Error((await res.text()).trim() || `BRouter error ${res.status}`);
-        return parseBRouter(await res.json());
+        const result = parseBRouter(await res.json());
+        legCache.set(key, result);
+        return result;
       })
       .catch((err) => {
         cache.delete(key);
