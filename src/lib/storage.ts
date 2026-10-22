@@ -1,4 +1,4 @@
-import { encodeRoute } from './routeUrl';
+import { decodeRoute, encodeRoute } from './routeUrl';
 import type { LegMode, LegResult } from './routing';
 
 export interface Waypoint {
@@ -31,7 +31,11 @@ interface LegacySavedRoute {
 const KEY = 'brp.routes';
 
 function migrate(r: SavedRoute | LegacySavedRoute): SavedRoute {
-  if (!('waypoints' in r)) return r;
+  if (!('waypoints' in r)) {
+    // Re-encode older link formats, so comparing with the current route's hash still works.
+    const state = decodeRoute(r.hash);
+    return state ? { ...r, hash: encodeRoute(state) } : r;
+  }
   return {
     id: r.id,
     name: r.name,

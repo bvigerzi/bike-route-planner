@@ -26,9 +26,9 @@ yarn build      # static output in dist/
 
 ### Route links
 
-The route is stored in the URL hash, e.g. `#v=1&n=Sunday%20ride&m=rd&w=-37.8136,144.9631,Federation%20Square;-37.81,144.97;-37.79,144.98`: `n` is the name, `w` the waypoints (`lat,lng[,label]`, 5 decimal places, about 1 m), and `m` the leg modes (`r` route, `d` direct; left out if every leg is routed). Legs are routed again when a link is opened. The format is in `src/lib/routeUrl.ts`.
+The whole route is stored in the URL hash as a compact binary encoding written in base64url, e.g. `#AgtTdW5kYXkgcmlkZQffy80D7MjpDRFGZWRlcmF0aW9uIFNxdWFyZdAF5AoAoB_QDwAC` (a route named *Sunday ride* with three waypoints, one labelled *Federation Square*, and a direct second leg). The link isn't a key into a database. It holds the name, the waypoints (5 decimal places, about 1 m, each stored as a small offset from the one before), their place names, and the leg modes. Legs are routed again when a link is opened. The format is in `src/lib/routeUrl.ts`. Older readable links (`#v=1&n=...&w=...`) still open.
 
-Each waypoint adds about 20 characters, plus its place name, so 100 waypoints is about 2 KB. The hash is never sent to a server, and browsers accept far longer URLs, so there's no fixed limit on waypoints. Some apps cut off links longer than about 2,000 characters, though, so the sidebar warns past that. Optimise shortens the link.
+Each waypoint adds about 7 characters, plus its place name, so 100 waypoints is about 0.7 KB. The hash is never sent to a server, and browsers accept far longer URLs, so there's no fixed limit on waypoints. Some apps cut off links longer than about 2,000 characters, though, so the sidebar warns past that. Optimise shortens the link.
 
 ### Path colours
 
@@ -62,4 +62,3 @@ Settings (router URL, profile, direct-leg speed, snap radius, default map centre
 - Search-as-you-type using Photon.
 - A modifier key (e.g. Alt+click) to place a point exactly, without snapping.
 - GPX export.
-- Short route links: a compact (e.g. base64) encoding of the whole route, still with no database.
