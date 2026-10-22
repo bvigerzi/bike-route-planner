@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { photonLabel, photonUrl } from './geocode';
+import { photonLabel, photonShortName, photonUrl } from './geocode';
 
 describe('photonLabel', () => {
   it('lists the name then wider areas, dropping repeats', () => {
@@ -27,5 +27,17 @@ describe('photonUrl', () => {
   it('leaves out the bias with no view', () => {
     const url = new URL(photonUrl('cafe'));
     expect(url.searchParams.has('lat')).toBe(false);
+  });
+});
+
+describe('photonShortName', () => {
+  it('prefers the place name', () => {
+    expect(photonShortName({ name: 'Flinders Street Station', street: 'Flinders Street', city: 'Melbourne' })).toBe('Flinders Street Station');
+  });
+
+  it('falls back to the address, then the area', () => {
+    expect(photonShortName({ housenumber: '12', street: 'Smith Street', city: 'Fitzroy' })).toBe('12 Smith Street');
+    expect(photonShortName({ district: 'Fitzroy', city: 'Melbourne' })).toBe('Fitzroy');
+    expect(photonShortName({ country: 'Australia' })).toBeUndefined();
   });
 });

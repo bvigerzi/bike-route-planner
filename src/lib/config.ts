@@ -4,6 +4,8 @@ export const BROUTER_PROFILE = 'safety';
 
 // Photon (OSM data, by Komoot) allows search-as-you-type, which Nominatim's usage policy forbids.
 export const PHOTON_URL = 'https://photon.komoot.io/api/';
+// Photon's reverse geocoder, which names what is at a coordinate (for waypoint names).
+export const PHOTON_REVERSE_URL = 'https://photon.komoot.io/reverse';
 // Search runs once typing pauses for this long, and only when the query has at least this many characters.
 export const SEARCH_DEBOUNCE_MS = 350;
 // Notices over the map (e.g. an edit refused while optimising) disappear after this long.

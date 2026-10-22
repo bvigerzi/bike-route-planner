@@ -3,6 +3,7 @@
   import { CATEGORIES, CATEGORY_ORDER } from './categories';
   import { DIRECT_SPEED_KMH, URL_WARN_LENGTH } from './config';
   import { downloadFile } from './download';
+  import { nameAt } from './geocode';
   import { toGpx } from './gpx';
   import { MAPS_APP_NAME, MAX_STOPS, mapsUrl, preferredMapsApp } from './mapsLink';
   import { renderRouteImage } from './routeImage';
@@ -43,6 +44,11 @@
   let editingId = $state<string | null>(null);
   let editingName = $state('');
 
+  /** The name lookup in progress, and why the last one gave nothing (shown as the field's placeholder). */
+  let lookup: AbortController | undefined;
+  let lookingUp = $state(false);
+  let lookupMiss = $state('');
+
   function startRename(wp: Waypoint) {
     editingId = wp.id;
     editingName = wp.name ?? '';
@@ -52,6 +58,27 @@
     if (editingId === null) return;
     if (name !== null) planner.renameWaypoint(editingId, name);
     editingId = null;
+    lookup?.abort();
+    lookingUp = false;
+    lookupMiss = '';
+  }
+
+  /** Fills the name field with what is at the waypoint (a business, building, road, ...). */
+  async function lookUpName(wp: Waypoint) {
+    lookup?.abort();
+    const controller = (lookup = new AbortController());
+    lookingUp = true;
+    lookupMiss = '';
+    try {
+      const name = await nameAt(wp.lat, wp.lng, controller.signal);
+      if (name) editingName = name;
+      else lookupMiss = 'No name found here';
+    } catch (e) {
+      if (controller.signal.aborted) return;
+      lookupMiss = e instanceof Error ? e.message : 'Lookup failed';
+    } finally {
+      if (lookup === controller) lookingUp = false;
+    }
   }
 
   function renameKey(e: KeyboardEvent) {
@@ -174,16 +201,37 @@
                   <li>
                     <span class="badge" class:start={i === 0 || isEnd}>{i === 0 ? 'S' : isEnd ? 'E' : i}</span>
                     {#if editingId === wp.id}
-                      <input
-                        class="wp-name"
-                        placeholder={wpPlace(wp)}
-                        title="Enter to save, Escape to cancel. Leave empty to show the coordinates."
-                        aria-label="Waypoint name"
-                        bind:value={editingName}
-                        onkeydown={renameKey}
-                        onblur={() => finishRename(editingName)}
-                        use:focus
-                      />
+                      <span class="wp-name">
+                        <input
+                          placeholder={lookupMiss || wpPlace(wp)}
+                          title="Enter to save, Escape to cancel. Leave empty to show the coordinates."
+                          aria-label="Waypoint name"
+                          bind:value={editingName}
+                          onkeydown={renameKey}
+                          onblur={() => finishRename(editingName)}
+                          use:focus
+                        />
+                        <!-- Keeps focus in the field, so its blur doesn't save and close it before the lookup fills it. -->
+                        <button
+                          class="icon lookup"
+                          class:busy={lookingUp}
+                          title="Look up the name of this spot (a business, building, road, ...)"
+                          aria-label="Look up name"
+                          disabled={lookingUp}
+                          onmousedown={(e) => e.preventDefault()}
+                          onclick={() => lookUpName(wp)}
+                        >
+                          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                            <path
+                              d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linejoin="round"
+                            />
+                          </svg>
+                        </button>
+                      </span>
                       {#if wp.name}
                         <!-- Keeps focus in the field, so its blur doesn't save the text first. -->
                         <button
@@ -538,14 +586,34 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* The name field, with the lookup star inside its right end. */
   .wp-name {
     flex: 1;
     min-width: 0;
+    position: relative;
+  }
+  .wp-name input {
+    width: 100%;
+    box-sizing: border-box;
     font-size: 13px;
-    padding: 1px 4px;
+    padding: 1px 22px 1px 4px;
+  }
+  .lookup {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
   }
   .icon svg {
     display: block;
+  }
+  .icon.busy {
+    animation: pulse 1s ease-in-out infinite alternate;
+  }
+  @keyframes pulse {
+    to {
+      opacity: 0.3;
+    }
   }
   .badge {
     flex: none;

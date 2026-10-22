@@ -1,4 +1,4 @@
-import { PHOTON_URL } from './config';
+import { PHOTON_REVERSE_URL, PHOTON_URL } from './config';
 
 export interface Place {
   label: string;
@@ -59,4 +59,19 @@ export async function searchPlaces(query: string, view?: Viewbox, signal?: Abort
     lat: f.geometry.coordinates[1],
     lng: f.geometry.coordinates[0],
   }));
+}
+
+/** A short name for a reverse-geocoded spot: the place itself (a business, building, ...), else its address, else its area. */
+export function photonShortName(p: PhotonProps): string | undefined {
+  const street = [p.housenumber, p.street].filter(Boolean).join(' ');
+  return p.name || street || p.locality || p.district || p.city || undefined;
+}
+
+/** Name the closest thing Photon knows of at a coordinate, or undefined if it knows of nothing there. */
+export async function nameAt(lat: number, lng: number, signal?: AbortSignal): Promise<string | undefined> {
+  const params = new URLSearchParams({ lat: String(lat), lon: String(lng), limit: '1' });
+  const res = await fetch(`${PHOTON_REVERSE_URL}?${params}`, { signal });
+  if (!res.ok) throw new Error(`Lookup failed (${res.status})`);
+  const { features }: { features: PhotonFeature[] } = await res.json();
+  return features[0] && photonShortName(features[0].properties);
 }
