@@ -421,7 +421,7 @@
      the planner beside it. On desktop the planner slides away to the left, on mobile down. */
   aside {
     position: relative;
-    z-index: 1001; /* Above Leaflet's panes and controls, so the tab overlaps the map. */
+    z-index: 1001; /* Above the map's controls, so the tab overlaps the map. */
     box-sizing: border-box;
     background: var(--bg);
   }

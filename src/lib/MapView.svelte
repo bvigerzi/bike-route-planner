@@ -1,24 +1,39 @@
 <script lang="ts">
-  import L from 'leaflet';
-  import 'leaflet/dist/leaflet.css';
+  import {
+    AttributionControl,
+    LngLatBounds,
+    Map as MapLibreMap,
+    Marker,
+    Popup,
+    setWorkerUrl,
+    type GeoJSONSource,
+    type IControl,
+    type TransformStyleFunction,
+  } from 'maplibre-gl';
+  import 'maplibre-gl/dist/maplibre-gl.css';
+  import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
   import { onMount } from 'svelte';
   import { fade } from 'svelte/transition';
   import { CATEGORIES, CATEGORY_ORDER } from './categories';
-  import { DEFAULT_CENTER, DEFAULT_ZOOM, DOUBLE_TAP_MS, MOBILE_QUERY, NOTICE_MS, TILE_URL, WHEEL_PX_PER_ZOOM_LEVEL } from './config';
+  import { DEFAULT_CENTER, DEFAULT_ZOOM, DOUBLE_TAP_MS, MAP_STYLE_DARK, MAP_STYLE_LIGHT, MOBILE_QUERY, NOTICE_MS } from './config';
   import { optimiseResultText, planner } from './state.svelte';
   import { undoShortcutLabel } from './shortcuts';
-  import { theme, toggleDark } from './theme.svelte';
+  import { theme, themeSync, toggleDark } from './theme.svelte';
 
-  // All Leaflet usage lives in this component so the map library can be swapped later.
+  // All MapLibre usage lives in this component so the map library can be swapped later.
+  // MapLibre looks for its worker beside its own module, which bundling moves; point it at the bundled copy.
+  setWorkerUrl(workerUrl);
+  // The rest of the app uses [lat, lng]; MapLibre takes [lng, lat].
+  const toLngLat = ([lat, lng]: [number, number]): [number, number] => [lng, lat];
+
   let container: HTMLDivElement;
-  let map: L.Map | undefined = $state();
-  const markerLayer = L.layerGroup();
-  const routeLayer = L.layerGroup();
+  let map: MapLibreMap | undefined = $state();
+  let markers: Marker[] = [];
   // Folded by default on mobile, where the open legend covers much of the map.
   let legendOpen = $state(!matchMedia(MOBILE_QUERY).matches);
   // The rows' natural width; folding animates the legend between it and the toggle's width.
   let legendRowsWidth = $state(0);
-  let fitButton: HTMLAnchorElement | undefined = $state();
+  let fitButton: HTMLButtonElement | undefined = $state();
 
   // Everything drawn on the map: waypoints plus the routed line of each leg.
   function contentPoints(): [number, number][] {
@@ -27,91 +42,196 @@
     return pts;
   }
 
+  // Route lines are one GeoJSON source. A routed segment has kind 'seg'; a leg still routing, or failed,
+  // is drawn as a straight 'placeholder' from waypoint to waypoint.
+  type RouteFeature = {
+    type: 'Feature';
+    properties: { kind: 'seg' | 'placeholder'; color: string; dashed: boolean; loading: boolean };
+    geometry: { type: 'LineString'; coordinates: [number, number][] };
+  };
+  let routeData: { type: 'FeatureCollection'; features: RouteFeature[] } = { type: 'FeatureCollection', features: [] };
+
+  // Dash lengths are in multiples of the line's width: 8px dashes on the 5px line, 4px dashes and 6px gaps on the 3px placeholder.
+  const ROUTE_DASH = [1.6, 1.6];
+  const PLACEHOLDER_WIDTH = 3;
+  const PLACEHOLDER_DASH = [4 / PLACEHOLDER_WIDTH, 6 / PLACEHOLDER_WIDTH];
+  // Marching ants while a leg is routing: the placeholder's 4px dash steps 1px along its 10px period each frame.
+  // A dash array must start with a dash, so a shifted pattern starts with a zero-length one (invisible with butt caps).
+  const ANT_FRAME_MS = 50;
+  const ANT_STEPS = Array.from({ length: 10 }, (_, o) =>
+    (o === 0 ? [4, 6] : o <= 6 ? [0, o, 4, 6 - o] : [o - 6, 6, 10 - o]).map((px) => px / PLACEHOLDER_WIDTH),
+  );
+  const round = { 'line-cap': 'round', 'line-join': 'round' } as const;
+  const routeLayers: ReturnType<TransformStyleFunction>['layers'] = [
+    // A white casing under every routed line, then the lines themselves.
+    { id: 'route-casing', type: 'line', source: 'route', filter: ['==', ['get', 'kind'], 'seg'], layout: round, paint: { 'line-color': '#fff', 'line-width': 9, 'line-opacity': 0.8 } },
+    {
+      id: 'route-solid',
+      type: 'line',
+      source: 'route',
+      filter: ['all', ['==', ['get', 'kind'], 'seg'], ['!', ['get', 'dashed']]],
+      layout: round,
+      paint: { 'line-color': ['get', 'color'], 'line-width': 5 },
+    },
+    {
+      id: 'route-dashed',
+      type: 'line',
+      source: 'route',
+      filter: ['all', ['==', ['get', 'kind'], 'seg'], ['get', 'dashed']],
+      layout: round,
+      paint: { 'line-color': ['get', 'color'], 'line-width': 5, 'line-dasharray': ROUTE_DASH },
+    },
+    {
+      id: 'route-placeholder',
+      type: 'line',
+      source: 'route',
+      filter: ['all', ['==', ['get', 'kind'], 'placeholder'], ['!', ['get', 'loading']]],
+      paint: { 'line-color': ['get', 'color'], 'line-width': PLACEHOLDER_WIDTH, 'line-dasharray': PLACEHOLDER_DASH },
+    },
+    {
+      id: 'route-loading',
+      type: 'line',
+      source: 'route',
+      filter: ['all', ['==', ['get', 'kind'], 'placeholder'], ['get', 'loading']],
+      paint: { 'line-color': ['get', 'color'], 'line-width': PLACEHOLDER_WIDTH, 'line-dasharray': PLACEHOLDER_DASH },
+    },
+  ];
+
+  // Adds the route on top of a newly loaded base style, with whatever it shows at that moment, so it
+  // survives the swap between the light and dark styles. 3D buildings are left out: they lean over the streets.
+  const withRoute: TransformStyleFunction = (_previous, next) => ({
+    ...next,
+    sources: { ...next.sources, route: { type: 'geojson', data: routeData } },
+    layers: [...next.layers.filter((l) => l.type !== 'fill-extrusion'), ...routeLayers],
+  });
+  const styleUrl = (dark: boolean) => (dark ? MAP_STYLE_DARK : MAP_STYLE_LIGHT);
+  // The theme whose style the map has (or is loading), and a promise that resolves once it has drawn.
+  let styleDark = theme.dark;
+  let styleReady = Promise.resolve();
+
+  // Zoom in, zoom out and zoom to fit, in one bar.
+  function zoomControl(m: MapLibreMap): IControl {
+    const bar = document.createElement('div');
+    bar.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+    const button = (label: string, path: string, onclick: () => void) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.title = label;
+      b.setAttribute('aria-label', label);
+      b.innerHTML = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="${path}" fill="none" stroke="currentColor" stroke-width="1.75"/></svg>`;
+      b.onclick = onclick;
+      bar.append(b);
+      return b;
+    };
+    button('Zoom in', 'M8 2v12M2 8h12', () => m.zoomIn());
+    button('Zoom out', 'M2 8h12', () => m.zoomOut());
+    fitButton = button('Zoom to fit route', 'M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4', () => {
+      const pts = contentPoints();
+      if (pts.length) planner.focus = pts;
+    });
+    return { onAdd: () => bar, onRemove: () => bar.remove() };
+  }
+
   onMount(() => {
-    const m = L.map(container, { wheelPxPerZoomLevel: WHEEL_PX_PER_ZOOM_LEVEL }).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
-    L.tileLayer(TILE_URL, {
+    const m = new MapLibreMap({
+      container,
+      center: toLngLat(DEFAULT_CENTER),
+      zoom: DEFAULT_ZOOM,
       maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · Routing <a href="https://brouter.de">BRouter</a>',
-    }).addTo(m);
-    routeLayer.addTo(m);
-    markerLayer.addTo(m);
+      // North stays up and the map stays flat, as for a paper map (and the exported image).
+      dragRotate: false,
+      pitchWithRotate: false,
+      attributionControl: false,
+    });
+    m.touchZoomRotate.disableRotation();
+    m.keyboard.disableRotation();
+    m.setStyle(styleUrl(styleDark), { transformStyle: withRoute });
+    m.addControl(zoomControl(m), 'top-left');
 
     const updateView = () => {
       const b = m.getBounds();
       planner.view = { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() };
     };
     m.on('moveend', updateView);
-    // Leaflet closes an open popup on preclick but still fires click; don't treat that dismissal as a new waypoint.
-    let popupOpen = false;
+    // Clicks on a marker reach the map too (markers sit over its canvas); the marker handles those itself.
+    const onMarker = (e: { originalEvent: Event }) => (e.originalEvent.target as Element).closest('.maplibregl-marker') !== null;
+    // A click on the map closes an open popup and is still a map click; don't treat that dismissal as a new waypoint.
     let dismissing = false;
-    m.on('popupopen', () => (popupOpen = true));
-    m.on('popupclose', () => (popupOpen = false));
-    m.on('preclick', () => (dismissing = popupOpen));
-    // A double tap zooms (Leaflet's doubleClickZoom), so on touch a tap waits to see whether a second follows
-    // before adding its waypoint. Mouse clicks add at once, as a double click is rarely meant as a zoom there.
+    // A double tap zooms, so on touch a tap waits to see whether a second follows before adding its waypoint.
+    // Mouse clicks add at once, as a double click is rarely meant as a zoom there.
+    // The second tap is caught as it lands, since MapLibre's double-tap zoom often stops it becoming a click.
     let lastPointerType = '';
-    L.DomEvent.on(container, 'pointerdown', (e) => (lastPointerType = (e as PointerEvent).pointerType));
     let pendingTap: ReturnType<typeof setTimeout> | undefined;
-    m.on('click', (e: L.LeafletMouseEvent) => {
+    let secondTap = false;
+    const onPointerDown = (e: PointerEvent) => {
+      lastPointerType = e.pointerType;
+      dismissing = markers.some((mk) => mk.getPopup()?.isOpen());
+      // The second tap of a double tap: neither tap adds a waypoint.
+      secondTap = pendingTap !== undefined;
+      clearTimeout(pendingTap);
+      pendingTap = undefined;
+    };
+    container.addEventListener('pointerdown', onPointerDown, { capture: true });
+    m.on('click', (e) => {
+      if (onMarker(e)) return;
       if (dismissing) {
         dismissing = false;
         return;
       }
       if (lastPointerType !== 'touch') {
-        planner.addWaypoint(e.latlng.lat, e.latlng.lng);
+        planner.addWaypoint(e.lngLat.lat, e.lngLat.lng);
         return;
       }
-      if (pendingTap !== undefined) {
-        // The second tap of a double tap: neither tap adds a waypoint.
-        clearTimeout(pendingTap);
-        pendingTap = undefined;
-        return;
-      }
+      if (secondTap) return;
       pendingTap = setTimeout(() => {
         pendingTap = undefined;
-        planner.addWaypoint(e.latlng.lat, e.latlng.lng);
+        planner.addWaypoint(e.lngLat.lat, e.lngLat.lng);
       }, DOUBLE_TAP_MS);
     });
     // Right-click adds a waypoint reached by a direct (straight line) leg.
-    m.on('contextmenu', (e: L.LeafletMouseEvent) => {
-      L.DomEvent.preventDefault(e.originalEvent);
-      planner.addWaypoint(e.latlng.lat, e.latlng.lng, undefined, 'direct');
-    });
-    // Zoom to fit sits in the zoom control's bar, under zoom in and out.
-    fitButton = L.DomUtil.create('a', 'zoom-fit', m.zoomControl.getContainer());
-    fitButton.href = '#';
-    fitButton.role = 'button';
-    fitButton.title = 'Zoom to fit route';
-    fitButton.setAttribute('aria-label', 'Zoom to fit route');
-    fitButton.innerHTML =
-      '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.75"/></svg>';
-    L.DomEvent.disableClickPropagation(fitButton);
-    L.DomEvent.on(fitButton, 'click', (e) => {
-      L.DomEvent.preventDefault(e);
-      const pts = contentPoints();
-      if (pts.length) planner.focus = pts;
+    m.on('contextmenu', (e) => {
+      e.preventDefault();
+      e.originalEvent.preventDefault();
+      if (!onMarker(e)) planner.addWaypoint(e.lngLat.lat, e.lngLat.lng, undefined, 'direct');
     });
     updateView();
     map = m;
-    // Leaflet only tracks window resizes; folding the planner on mobile resizes the map on its own.
-    const resize = new ResizeObserver(() => m.invalidateSize());
-    resize.observe(container);
-    // On mobile the planner's tab overlaps the bottom of the map, so the attribution moves to the top.
+    // Waits for the next style to load and draw, for the theme's cross-fade.
+    themeSync.mapReady = () => styleReady;
+    // On mobile the full credits would wrap over the controls, so they fold behind an (i) button in the bottom
+    // left, clear of the planner's tab. A control's options are fixed once added, so it is replaced to switch.
     const mobile = matchMedia(MOBILE_QUERY);
-    const placeAttribution = () => m.attributionControl.setPosition(mobile.matches ? 'topright' : 'bottomright');
+    let attribution: AttributionControl | undefined;
+    const placeAttribution = () => {
+      if (attribution) m.removeControl(attribution);
+      attribution = new AttributionControl({ compact: mobile.matches, customAttribution: 'Routing <a href="https://brouter.de">BRouter</a>' });
+      m.addControl(attribution, mobile.matches ? 'bottom-left' : 'bottom-right');
+    };
     placeAttribution();
     mobile.addEventListener('change', placeAttribution);
     return () => {
       mobile.removeEventListener('change', placeAttribution);
+      container.removeEventListener('pointerdown', onPointerDown, { capture: true });
       clearTimeout(pendingTap);
-      resize.disconnect();
+      delete themeSync.mapReady;
       m.remove();
     };
   });
 
+  // Base map style, following the theme
+  $effect(() => {
+    const dark = theme.dark;
+    const m = map;
+    if (!m || dark === styleDark) return;
+    styleDark = dark;
+    styleReady = new Promise((resolve) => m.once('style.load', () => m.once('idle', () => resolve())));
+    m.setStyle(styleUrl(dark), { transformStyle: withRoute });
+  });
+
   // Markers
   $effect(() => {
-    markerLayer.clearLayers();
+    const m = map;
+    if (!m) return;
     const loop = planner.loop;
     const count = planner.waypoints.length;
     planner.waypoints.forEach((wp, i) => {
@@ -121,77 +241,83 @@
       const isEnd = !isStart && i === count - 1;
       // Clicking the start closes the route into a loop, once there is somewhere to loop from.
       const closesLoop = isStart && !loop && count > 1;
-      const icon = L.divIcon({
-        className: '',
-        html: `<div class="wp-marker${isStart || isEnd ? ' start' : ''}${isStart && loop ? ' loop' : ''}">${isStart ? (loop ? 'S/E' : 'S') : isEnd ? 'E' : i}</div>`,
-        iconSize: [26, 26],
-        iconAnchor: [13, 13],
-        popupAnchor: [0, -13],
-      });
-      // Left-click only offers removal, so a press that was meant as a drag can't delete the point.
-      const removeBtn = L.DomUtil.create('button', 'wp-remove');
-      removeBtn.type = 'button';
-      removeBtn.textContent = isStart && loop ? 'Remove end?' : 'Remove?';
-      removeBtn.onclick = () => planner.removeWaypoint(wp.id);
+      const el = document.createElement('div');
+      el.className = `wp-marker${isStart || isEnd ? ' start' : ''}${isStart && loop ? ' loop' : ''}`;
+      el.textContent = isStart ? (loop ? 'S/E' : 'S') : isEnd ? 'E' : `${i}`;
       const name = isStart ? (loop ? 'Start / end point' : 'Start / meeting point') : isEnd ? 'End point' : `Waypoint ${i}`;
-      const marker = L.marker([wp.lat, wp.lng], { icon, draggable: true })
-        .bindTooltip(
-          closesLoop
-            ? `${name} — drag to move, click to return here at the end, right-click to remove`
-            : `${name} — drag to move, click for options, right-click to remove${loop && isStart ? ' the end' : ''}`,
-        )
-        .on('popupopen', () => marker.closeTooltip())
-        .on('dragstart', () => marker.closePopup())
-        .on('dragend', () => {
-          const ll = marker.getLatLng();
-          // Put the marker back if the move was refused.
-          if (!planner.moveWaypoint(wp.id, ll.lat, ll.lng)) marker.setLatLng([wp.lat, wp.lng]);
-        })
-        .on('contextmenu', (e: L.LeafletMouseEvent) => {
-          L.DomEvent.preventDefault(e.originalEvent);
-          planner.removeWaypoint(wp.id);
-        });
+      el.title = closesLoop
+        ? `${name} — drag to move, click to return here at the end, right-click to remove`
+        : `${name} — drag to move, click for options, right-click to remove${loop && isStart ? ' the end' : ''}`;
+      el.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        planner.removeWaypoint(wp.id);
+      });
+      const marker = new Marker({ element: el, draggable: true }).setLngLat([wp.lng, wp.lat]);
+      marker.on('dragstart', () => marker.getPopup()?.remove());
+      marker.on('dragend', () => {
+        const ll = marker.getLngLat();
+        // Put the marker back if the move was refused.
+        if (!planner.moveWaypoint(wp.id, ll.lat, ll.lng)) marker.setLngLat([wp.lng, wp.lat]);
+      });
       if (closesLoop) marker.on('click', () => planner.closeLoop());
-      else marker.bindPopup(removeBtn, { closeButton: false, className: 'wp-popup' });
-      markerLayer.addLayer(marker);
+      else {
+        // Left-click only offers removal, so a press that was meant as a drag can't delete the point.
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'wp-remove';
+        removeBtn.textContent = isStart && loop ? 'Remove end?' : 'Remove?';
+        removeBtn.onclick = () => planner.removeWaypoint(wp.id);
+        marker.setPopup(new Popup({ closeButton: false, offset: 13, className: 'wp-popup' }).setDOMContent(removeBtn));
+      }
+      markers.push(marker.addTo(m));
     });
+    return () => {
+      for (const marker of markers) marker.remove();
+      markers = [];
+    };
   });
 
   // Route lines
   $effect(() => {
-    routeLayer.clearLayers();
+    const features: RouteFeature[] = [];
+    const line = (coords: [number, number][], props: RouteFeature['properties']) =>
+      features.push({ type: 'Feature', properties: props, geometry: { type: 'LineString', coordinates: coords.map(toLngLat) } });
     planner.legs.forEach((leg, i) => {
       if (leg.result) {
-        for (const seg of leg.result.segments) {
-          const style = CATEGORIES[seg.category];
-          L.polyline(seg.coords, { color: '#fff', weight: 9, opacity: 0.8, interactive: false }).addTo(routeLayer);
-          L.polyline(seg.coords, {
-            color: style.color,
-            weight: 5,
-            dashArray: style.dashed ? '8 8' : undefined,
-            interactive: false,
-          }).addTo(routeLayer);
+        for (const s of leg.result.segments) {
+          const style = CATEGORIES[s.category];
+          line(s.coords, { kind: 'seg', color: style.color, dashed: !!style.dashed, loading: false });
         }
       } else {
         // Placeholder while routing, or on error.
         const a = planner.waypoints[i];
         const b = planner.waypoints[i + 1];
         if (!a || !b) return;
-        L.polyline(
+        line(
           [
             [a.lat, a.lng],
             [b.lat, b.lng],
           ],
-          {
-            color: leg.status === 'error' ? '#d62728' : '#999',
-            weight: 3,
-            dashArray: '4 6',
-            interactive: false,
-            className: leg.status === 'loading' ? 'route-loading' : undefined,
-          },
-        ).addTo(routeLayer);
+          { kind: 'placeholder', color: leg.status === 'error' ? '#d62728' : '#999', dashed: true, loading: leg.status === 'loading' },
+        );
       }
     });
+    routeData = { type: 'FeatureCollection', features };
+    // Missing while the first style loads; it then picks up routeData itself.
+    (map?.getSource('route') as GeoJSONSource | undefined)?.setData(routeData);
+  });
+
+  // Marching ants on legs that are routing.
+  $effect(() => {
+    const m = map;
+    const routing = planner.legs.some((l) => !l.result && l.status === 'loading');
+    if (!m || !routing || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let step = 0;
+    const timer = setInterval(() => {
+      step = (step + 1) % ANT_STEPS.length;
+      if (m.getLayer('route-loading')) m.setPaintProperty('route-loading', 'line-dasharray', ANT_STEPS[step]);
+    }, ANT_FRAME_MS);
+    return () => clearInterval(timer);
   });
 
   // Each new notice shows for NOTICE_MS, restarting the timer if one is already showing.
@@ -223,17 +349,19 @@
 
   // Nothing to fit until there is a waypoint.
   $effect(() => {
-    const empty = !planner.waypoints.length;
-    fitButton?.classList.toggle('leaflet-disabled', empty);
-    fitButton?.setAttribute('aria-disabled', String(empty));
+    if (fitButton) fitButton.disabled = !planner.waypoints.length;
   });
 
   // Zoom to requested points
   $effect(() => {
     const pts = planner.focus;
     if (!map || !pts?.length) return;
-    if (pts.length === 1) map.setView(pts[0], Math.max(map.getZoom(), 15));
-    else map.fitBounds(pts, { padding: [40, 40] });
+    if (pts.length === 1) map.easeTo({ center: toLngLat(pts[0]), zoom: Math.max(map.getZoom(), 15) });
+    else {
+      const bounds = new LngLatBounds(toLngLat(pts[0]), toLngLat(pts[0]));
+      for (const p of pts) bounds.extend(toLngLat(p));
+      map.fitBounds(bounds, { padding: 40 });
+    }
   });
 </script>
 
@@ -336,44 +464,65 @@
   }
   .map {
     height: 100%;
-    cursor: crosshair;
     background: var(--map-bg);
   }
-  /* Only the base tiles are filtered (darkened in dark mode); routes and markers keep their colours. */
-  .map :global(.leaflet-tile-pane) {
-    filter: var(--tile-filter);
+  /* A crosshair for placing points, instead of MapLibre's grab hand; it still grabs while panning. */
+  .map :global(.maplibregl-canvas-container.maplibregl-interactive) {
+    cursor: crosshair;
   }
-  .map :global(.leaflet-bar a),
-  .map :global(.leaflet-popup-content-wrapper),
-  .map :global(.leaflet-popup-tip),
-  .map :global(.leaflet-tooltip) {
+  .map :global(.maplibregl-canvas-container.maplibregl-interactive:active) {
+    cursor: grabbing;
+  }
+  .map :global(.maplibregl-ctrl-group),
+  .map :global(.maplibregl-popup-content) {
     background: var(--bg);
     color: var(--fg);
   }
-  .map :global(.leaflet-bar a:hover) {
-    background: var(--button-hover);
-  }
-  .map :global(.leaflet-bar a),
-  .map :global(.leaflet-tooltip) {
-    border-color: var(--border);
-  }
-  /* Restates Leaflet's disabled look, which the theme colours above would otherwise hide. */
-  .map :global(.leaflet-bar a.leaflet-disabled) {
-    background: var(--button-bg);
-    color: var(--border);
-    cursor: default;
-  }
-  .map :global(.zoom-fit) {
+  .map :global(.maplibregl-ctrl-group button) {
+    width: 30px;
+    height: 30px;
     display: flex;
     align-items: center;
     justify-content: center;
+    color: inherit;
   }
-  .map :global(.leaflet-control-attribution) {
+  .map :global(.maplibregl-ctrl-group button + button) {
+    border-top-color: var(--border);
+  }
+  .map :global(.maplibregl-ctrl-group button:hover:not(:disabled)) {
+    background: var(--button-hover);
+  }
+  .map :global(.maplibregl-ctrl-group button:disabled) {
+    opacity: 1;
+    color: var(--border);
+  }
+  /* The popup's tip is a border triangle, on the side facing the marker. */
+  .map :global(.maplibregl-popup-anchor-top .maplibregl-popup-tip),
+  .map :global(.maplibregl-popup-anchor-top-left .maplibregl-popup-tip),
+  .map :global(.maplibregl-popup-anchor-top-right .maplibregl-popup-tip) {
+    border-bottom-color: var(--bg);
+  }
+  .map :global(.maplibregl-popup-anchor-bottom .maplibregl-popup-tip),
+  .map :global(.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip),
+  .map :global(.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip) {
+    border-top-color: var(--bg);
+  }
+  .map :global(.maplibregl-popup-anchor-left .maplibregl-popup-tip) {
+    border-right-color: var(--bg);
+  }
+  .map :global(.maplibregl-popup-anchor-right .maplibregl-popup-tip) {
+    border-left-color: var(--bg);
+  }
+  .map :global(.maplibregl-ctrl-attrib) {
     background: var(--overlay-bg);
     color: var(--fg);
   }
-  .map :global(.leaflet-control-attribution a) {
+  .map :global(.maplibregl-ctrl-attrib a) {
     color: inherit;
+  }
+  /* The folded credits' (i) icon is drawn dark, so light it up in dark mode. */
+  :global([data-theme='dark']) .map :global(.maplibregl-ctrl-attrib-button) {
+    filter: invert(1);
   }
   .legend {
     position: absolute;
@@ -447,20 +596,6 @@
     .legend {
       bottom: 36px;
     }
-    /* Below the attribution, which moves to the top right on mobile. */
-    .theme-toggle,
-    .notice-wrap {
-      top: 28px;
-    }
-    .undo-button {
-      top: 68px;
-    }
-    .clear-button {
-      top: 108px;
-    }
-    .optimise-button {
-      top: 148px;
-    }
   }
   .legend-toggle {
     display: block;
@@ -513,19 +648,7 @@
     height: 4px;
     border-radius: 2px;
   }
-  /* Marching-ants placeholder while a leg is routing; offset shifts by one dash period (4 + 6). */
-  :global(.route-loading) {
-    animation: route-ants 0.5s linear infinite;
-  }
-  @keyframes -global-route-ants {
-    to {
-      stroke-dashoffset: -10;
-    }
-  }
   @media (prefers-reduced-motion: reduce) {
-    :global(.route-loading) {
-      animation: none;
-    }
     #legend-rows,
     #legend-rows.folded {
       transition: none;
@@ -544,6 +667,7 @@
     justify-content: center;
     font: bold 12px system-ui, sans-serif;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+    cursor: pointer;
   }
   :global(.wp-marker.start) {
     background: var(--danger);
@@ -551,8 +675,8 @@
   :global(.wp-marker.loop) {
     font-size: 9px;
   }
-  :global(.wp-popup .leaflet-popup-content) {
-    margin: 6px;
+  :global(.wp-popup .maplibregl-popup-content) {
+    padding: 6px;
   }
   :global(.wp-remove) {
     background: #c0392b;
