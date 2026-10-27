@@ -8,6 +8,7 @@
     setWorkerUrl,
     type GeoJSONSource,
     type IControl,
+    type StyleSpecification,
     type TransformStyleFunction,
   } from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
@@ -18,7 +19,7 @@
   import { DEFAULT_CENTER, DEFAULT_ZOOM, DOUBLE_TAP_MS, MAP_STYLE_DARK, MAP_STYLE_LIGHT, MOBILE_QUERY, NOTICE_MS } from './config';
   import { optimiseResultText, planner } from './state.svelte';
   import { undoShortcutLabel } from './shortcuts';
-  import { theme, themeSync, toggleDark } from './theme.svelte';
+  import { theme, toggleDark } from './theme.svelte';
 
   // All MapLibre usage lives in this component so the map library can be swapped later.
   // MapLibre looks for its worker beside its own module, which bundling moves; point it at the bundled copy.
@@ -105,9 +106,21 @@
     layers: [...next.layers.filter((l) => l.type !== 'fill-extrusion'), ...routeLayers],
   });
   const styleUrl = (dark: boolean) => (dark ? MAP_STYLE_DARK : MAP_STYLE_LIGHT);
-  // The theme whose style the map has (or is loading), and a promise that resolves once it has drawn.
+  // The theme whose style the map has (or is loading).
   let styleDark = theme.dark;
-  let styleReady = Promise.resolve();
+  // Both styles' JSON, fetched once the map first settles, so switching theme doesn't wait on the network.
+  // Until a style has arrived, switching to it falls back to its URL.
+  const prefetchedStyles: Record<string, StyleSpecification> = {};
+  function prefetchStyle(url: string) {
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : undefined))
+      .then((style) => {
+        if (style) prefetchedStyles[url] = style;
+      })
+      .catch(() => {
+        // Offline or blocked; the switch fetches the URL itself.
+      });
+  }
 
   // Zoom in, zoom out and zoom to fit, in one bar.
   function zoomControl(m: MapLibreMap): IControl {
@@ -146,6 +159,11 @@
     m.touchZoomRotate.disableRotation();
     m.keyboard.disableRotation();
     m.setStyle(styleUrl(styleDark), { transformStyle: withRoute });
+    // After the first style's tiles, so it doesn't compete with them.
+    m.once('idle', () => {
+      prefetchStyle(MAP_STYLE_LIGHT);
+      prefetchStyle(MAP_STYLE_DARK);
+    });
     m.addControl(zoomControl(m), 'top-left');
 
     const updateView = () => {
@@ -196,8 +214,6 @@
     });
     updateView();
     map = m;
-    // Waits for the next style to load and draw, for the theme's cross-fade.
-    themeSync.mapReady = () => styleReady;
     // On mobile the full credits would wrap over the controls, so they fold behind an (i) button in the bottom
     // left, clear of the planner's tab. A control's options are fixed once added, so it is replaced to switch.
     const mobile = matchMedia(MOBILE_QUERY);
@@ -213,7 +229,6 @@
       mobile.removeEventListener('change', placeAttribution);
       container.removeEventListener('pointerdown', onPointerDown, { capture: true });
       clearTimeout(pendingTap);
-      delete themeSync.mapReady;
       m.remove();
     };
   });
@@ -224,8 +239,10 @@
     const m = map;
     if (!m || dark === styleDark) return;
     styleDark = dark;
-    styleReady = new Promise((resolve) => m.once('style.load', () => m.once('idle', () => resolve())));
-    m.setStyle(styleUrl(dark), { transformStyle: withRoute });
+    const url = styleUrl(dark);
+    const prefetched = prefetchedStyles[url];
+    // A copy, as MapLibre may hold on to (or alter) the object it is given, and the cached one is reused.
+    m.setStyle(prefetched ? structuredClone(prefetched) : url, { transformStyle: withRoute });
   });
 
   // Markers
