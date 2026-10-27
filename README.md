@@ -23,7 +23,7 @@ yarn build      # static output in dist/
 - **Save** keeps the route's name and link in browser localStorage, so it shows under *Saved routes* to load again later.
 - **Open in maps** opens cycling directions in a maps app, with every waypoint as a stop. On iPhone and iPad it uses an Apple Maps link, which iOS may pass to your default navigation app. Everywhere else it uses Google Maps, which opens its app on Android. Google Maps allows at most 9 stops between the start and the end, so the button is disabled for longer routes. The maps app does its own routing between stops, so *Direct* legs aren't kept.
 - **Download GPX** saves the exact routed track, with the waypoints, for bike apps such as Komoot, Strava, Garmin or OsmAnd.
-- **Export image** saves a PNG of the route on the map, zoomed in as far as the whole route and every waypoint will fit (up to 1600 px each way), rendered at 2× with more detailed map tiles so you can zoom in on it to check the streets. Only the start and end are marked, so the route stays clear.
+- **Export image** saves a PNG of the route on the map, zoomed in as far as the whole route and every waypoint will fit (up to 1600 px each way), rendered at 2× with more detailed map tiles so you can zoom in on it to check the streets. It uses the standard OpenStreetMap tiles, so it looks different from the map on screen. Only the start and end are marked, so the route stays clear.
 
 ### Route links
 
@@ -46,7 +46,7 @@ Classification rules are in `src/lib/categories.ts`.
 
 ## How it works
 
-- **Map:** [Leaflet](https://leafletjs.com) with standard OSM raster tiles.
+- **Map:** [MapLibre GL JS](https://maplibre.org) with [OpenFreeMap](https://openfreemap.org) vector tiles (no API key). The light theme uses its *Liberty* style and the dark theme its *Dark* style. All map-library code is in `src/lib/MapView.svelte`. Route data stays plain `[lat, lng]` arrays tagged by category (`src/lib/routing.ts`).
 - **Routing:** the public [BRouter](https://brouter.de) instance, `safety` profile. No API key is needed. Each leg is routed on its own and cached. BRouter returns the OSM tags for every section of a leg, and the app uses them to choose the colour. Time and ascent come from BRouter. Direct legs are estimated at 15 km/h.
 - **Rate limiting:** BRouter documents no rate limit, but brouter.de answers 403 if it gets too many requests. So the app sends BRouter requests one at a time (`src/lib/throttle.ts`). During a burst, such as rapid clicking or Optimise, the gap between requests doubles from 250 ms up to 2 s. Points show on the map straight away, and their legs stay grey and dotted until routed. After a 403 or 429, the app waits 2 s, doubling up to 30 s, and retries up to 3 times.
 - **Search:** [Photon](https://photon.komoot.io), which searches OpenStreetMap as you type. Results favour the area the map is showing. Requests wait for a 350 ms pause in typing and need at least 3 characters; Enter searches straight away.
@@ -55,7 +55,7 @@ Settings (router URL, profile, direct-leg speed, snap radius, default map centre
 
 ## Future considerations
 
-- **Switch to MapLibre GL (vector tiles).** We started with Leaflet for the MVP because it is small and simple, but vector maps are preferred long term. To keep the switch cheap, all Leaflet code is in `src/lib/MapView.svelte`, and route data is plain `[lat, lng]` arrays tagged by category (`src/lib/routing.ts`). Only that component should need rewriting.
+- Render **Export image** from the vector map too, so it matches the screen. This would also stop the export fetching from the OSM tile servers.
 - Areas you draw where the router should prefer riding (local knowledge, beyond straight-line overrides).
 - A global "allow footpaths" toggle, using a custom BRouter profile.
 - Self-hosting BRouter if the public instance becomes a limitation.

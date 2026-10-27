@@ -18,8 +18,6 @@
   --danger-text: #c0392b;
   --success-text: #27ae60;
   --map-bg: #ddd;
-  /* Applied to the OpenStreetMap tiles, which only come in light. */
-  --tile-filter: none;
 }
 
 :root[data-theme='dark'] {
@@ -41,7 +39,6 @@
   --danger-text: #ff7b6b;
   --success-text: #4cd286;
   --map-bg: #222;
-  --tile-filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.85);
 }
 
 /* The cross-fade when switching theme (see toggleDark). */
