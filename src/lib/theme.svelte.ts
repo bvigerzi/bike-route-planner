@@ -14,12 +14,6 @@ function load(): boolean {
 
 export const theme = $state({ dark: load() });
 
-// The map swaps to its light or dark style when the theme changes, and sets this to a promise that resolves
-// once the new style has drawn, so the cross-fade below ends on it rather than on a half-loaded map.
-export const themeSync: { mapReady?: () => Promise<void> } = {};
-// Longer than this and the fade goes ahead without waiting for the map.
-const MAP_WAIT_MS = 1500;
-
 function apply() {
   theme.dark = !theme.dark;
   document.documentElement.dataset.theme = theme.dark ? 'dark' : 'light';
@@ -30,13 +24,13 @@ function apply() {
   }
 }
 
-// Cross-fades the whole page (map tiles included) between themes where the browser supports view transitions.
+// Cross-fades the whole page between themes where the browser supports view transitions. The fade starts at once
+// and never waits for the map: the page stays frozen until the callback resolves, which read as a missed click.
 export function toggleDark() {
   if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     document.startViewTransition(async () => {
       apply();
       await tick();
-      await Promise.race([themeSync.mapReady?.(), new Promise((r) => setTimeout(r, MAP_WAIT_MS))]);
     });
   } else {
     apply();
